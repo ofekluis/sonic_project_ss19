@@ -12,6 +12,7 @@ from skimage.transform import resize
 import os
 import random
 import numpy as np
+import atari_wrappers
 import gym
 import retro
 import copy
@@ -85,14 +86,8 @@ def main():
 
     games = ["SonicTheHedgehog-Genesis"]
     #game = np.random.choice(games,1)[0]
-    #states= retro.data.list_states(game)
-    #print(states)
-    #state="GreenHillZone.Act1"
-    #state = np.random.choice(states,1)[0]
     #env = retro.make(game, state,record='logs/')
     #env = AllowBacktracking(make(game, state)) #contest version
-    #env = SonicDiscretizer(env) #contest version
-    #print(game,'-',state)
 
     # Parameters
     timesteps = 1000#4500
@@ -109,6 +104,7 @@ def main():
     learning_rate = 5e-5
     max_reward = 0
     min_reward = 10000
+    frames_stack=4 # how many frames to be stacked together
     #action_threshold = 1
     target_step_interval = 10
     reward_clip = 200
@@ -117,15 +113,7 @@ def main():
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True # pylint: disable=E1101
     with tf.Session(config=config) as sess:
-        #input observation state, output Q of actions
-        #model = Sequential()
-        #model.add(Conv2D(32, kernel_size=(8,8), strides = 4, activation="relu", input_shape=(128,128,3)))
-        #model.add(Conv2D(64, kernel_size=(4,4), strides = 2, activation="relu"))
-        #model.add(Conv2D(64, (3,3), activation="relu"))
-        #model.add(Flatten())
-        #model.add(Dense(512, activation="relu"))
-        #model.add(Dense(env.action_space.n, kernel_initializer="uniform", activation="linear"))
-        model=effnet.Effnet(input_shape=(128,128,3),nb_classes=ACTION_SIZE, info=11)
+        model=effnet.Effnet(input_shape=(84,84,frames_stack),nb_classes=ACTION_SIZE, info=11)
         if os.path.isfile("sonic_model.h5"):
             model.load_weights("sonic_model.h5")
 
@@ -159,12 +147,12 @@ def main():
                 game = np.random.choice(games,1)[0]
                 state = np.random.choice(retro.data.list_states(game),1)[0]
                 print("Playing",game,"-",state)
-                env = AllowBacktracking(retro.make(game, state,scenario="scenario.json", record="logs/"))
-                #env = AllowBacktracking(make(game, state)) #contest version
+                #env = AllowBacktracking(retro.make(game, state,scenario="scenario.json", record="logs/"))
+                env = retro.make(game, state,scenario="scenario.json", record="logs/")
+                env = atari_wrappers.WarpFrame(env, 84, 84, grayscale=True)
+                env = atari_wrappers.FrameStack(env,frames_stack)
                 env = SonicDiscretizer(env) #contest version
                 obs = env.reset() #game start
-                obs_resized = resize(obs, resize_to)
-                diff_obs = obs_resized #difference between obs_new and obs to capture velocity
 
                 done = False
                 total_raw_reward = 0.0
@@ -179,75 +167,39 @@ def main():
                         action = env.action_space.sample()
                     reward_hold = np.zeros(hold_action)
                     for h in range(hold_action):
-                        obs_new, reward_hold[h], done, info = env.step(action)     # result of action
+                        obs, reward_hold[h], done, info = env.step(action)     # result of action
+                    obs = np.array(obs)
                     reward = sum(reward_hold)
                     reward_ = min(reward,reward_clip)
                     info = np.array(list(info.values()))
-                    obs_new_resized = resize(obs_new, resize_to)
-                    diff_obs_new = obs_new_resized - obs_resized
                     #Bellman double Q
-                    Q = model.predict([diff_obs[np.newaxis,:],info[np.newaxis,:]])          # Q-values predictions
-                    Q_ = model.predict([diff_obs_new[np.newaxis,:],info[np.newaxis,:]])
-                    Q_target = target_model.predict([diff_obs_new[np.newaxis,:],info[np.newaxis,:]])
+                    Q = model.predict([obs[np.newaxis,:],info[np.newaxis,:]])          # Q-values predictions
+                    Q_target = target_model.predict([obs[np.newaxis,:],info[np.newaxis,:]])
 
                     target_ = copy.copy(Q)
 
                     if done:
                         target_[0,action] = reward_ - reward_clip
                     else:
-                        target_[0,action] = reward_ + gamma * Q_target[0,:][np.argmax(Q_[0,:])]
+                        target_[0,action] = reward_ + gamma * Q_target[0,:][np.argmax(Q[0,:])]
 
                     distance_from_target = mean_squared_error(Q, target_)
-                    """else:
-
-                    action = np.argmax(Q)
-
-                    reward_hold = np.zeros(hold_action)
-                    for h in range(hold_action):
-                        obs_new, reward_hold[h], done, info = env.step(action)     # result of action
-                    reward = sum(reward_hold)
-                    reward_ = min(reward,reward_clip)
-                    info = np.array(list(info.values()))
-                    obs_new_resized = resize(obs_new, resize_to)
-                    diff_obs_new = obs_new_resized - obs_resized
-
-                    #Bellman double Q
-                    Q = model.predict([diff_obs[np.newaxis,:],info[np.newaxis,:]])          # Q-values predictions
-                    Q_ = model.predict([diff_obs_new[np.newaxis,:],info[np.newaxis,:]])
-                    Q_target = target_model.predict([diff_obs_new[np.newaxis,:],info[np.newaxis,:]])
-
-                    target_ = copy.copy(Q)
-
-                    if done:
-                        target_[0,action] = reward_ - reward_clip
-                    else:
-                        target_[0,action] = reward_ + gamma * Q_target[0,:][np.argmax(Q_[0,:])]
-
-                    distance_from_target = mean_squared_error(Q, target_)
-                        #print("distance from target",distance_from_target)
-                    """
                     total_raw_reward += reward
 
-                    #memory.append((diff_obs, action, reward, diff_obs_new, done))
                     max_reward = max(reward, max_reward)
                     min_reward = min(reward, min_reward)
 
                     if distance_from_target > 25:
-                        memory.append((diff_obs, action, reward, diff_obs_new, done, info))
+                        memory.append((obs, action, reward, done, info))
                     elif done:
-                        memory.append((diff_obs, action, reward, diff_obs_new, done, info))
+                        memory.append((obs, action, reward, done, info))
 
-                    # save obs state
-                    obs_resized = obs_new_resized
-                    diff_obs = diff_obs_new
 
                     if done:
                         obs = env.reset()           #restart game if done
-                        obs_resized = resize(obs, resize_to)
-                        diff_obs = obs_resized #difference between obs_new and obs to capture velocity
 
                 #epsilon = min_random + (max_random-min_random)*np.exp(-rand_decay*(training_loop*sub_loops + sub_training_loop+1))
-                epsilon -=0.01
+                epsilon -=0.001
                 print("Total reward: {}".format(total_raw_reward))
                 print("Avg. step reward: {}".format(total_raw_reward/timesteps))
                 print("Observation Finished",sub_training_loop+1,"x",training_loop+1,"out of",sub_loops,"x",loops)
@@ -260,7 +212,7 @@ def main():
                     minibatch = random.sample(memory, mb_size)
 
                     info_inputs = np.zeros((mb_size,11))
-                    inputs_shape = (mb_size,) + obs_resized.shape
+                    inputs_shape = (mb_size,) + obs.shape
                     inputs = np.zeros(inputs_shape)
                     targets = np.zeros((mb_size, env.action_space.n))
 
@@ -280,29 +232,27 @@ def main():
                         target_model.compile(loss="mse", optimizer=optimizers.Adam(lr=learning_rate), metrics=["accuracy"])
 
                     for i in range(0, mb_size):
-                        diff_obs = minibatch[i][0]
+                        obs = minibatch[i][0]
                         action = minibatch[i][1]
                         reward = minibatch[i][2]
-                        diff_obs_new = minibatch[i][3]
-                        done = minibatch[i][4]
-                        info = minibatch[i][5]
+                        done = minibatch[i][3]
+                        info = minibatch[i][4]
 
                         #reward clipping
                         reward = min(reward,reward_clip)
 
                         #Bellman double Q
-                        inputs[i] = diff_obs[np.newaxis,:]
+                        inputs[i] = obs[np.newaxis,:]
                         info_inputs[i] = info
-                        Q = model.predict([diff_obs[np.newaxis,:],info[np.newaxis,:]])          # Q-values predictions
-                        Q_ = model.predict([diff_obs_new[np.newaxis,:],info[np.newaxis,:]])
-                        Q_target = target_model.predict([diff_obs_new[np.newaxis,:],info[np.newaxis,:]])
+                        Q = model.predict([obs[np.newaxis,:],info[np.newaxis,:]])          # Q-values predictions
+                        Q_target = target_model.predict([obs[np.newaxis,:],info[np.newaxis,:]])
 
                         targets[i] = copy.copy(Q)
 
                         if done:
                             targets[i, action] = reward - reward_clip
                         else:
-                            targets[i, action] = reward + gamma * Q_target[0,:][np.argmax(Q_[0,:])]
+                            targets[i, action] = reward + gamma * Q_target[0,:][np.argmax(Q[0,:])]
 
                     #train network on constructed inputs,targets
                     logs = model.train_on_batch([inputs, info_inputs], targets)
