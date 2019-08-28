@@ -79,6 +79,20 @@ class SonicDiscretizer(gym.ActionWrapper):
         return self._actions[a].copy()
 
 #end of env specific
+def reward_calc(last_info, info, done):
+    """calculates the reward from the info vector of the two last timesteps"""
+    if len(last_info)==0: #in case this is the first step, we have no reward
+        return 0
+    rew=0
+    if done:
+        return 1000
+    if info["x"] > last_info["x"]:
+        rew+=10
+    if info["lives"] < last_info["lives"]:
+        rew-=100
+    if info["rings"] > last_info["rings"]:
+        rew+=10
+    return rew
 
 def main():
 
@@ -90,7 +104,7 @@ def main():
     #env = AllowBacktracking(make(game, state)) #contest version
 
     # Parameters
-    timesteps = 1000#4500
+    timesteps = 10000#4500
     memory = deque(maxlen=30000)
     epsilon = 0.5                                #probability of doing a random move
     max_random = 1
@@ -146,6 +160,8 @@ def main():
                 loop_start_time = time.time()
                 game = np.random.choice(games,1)[0]
                 state = np.random.choice(retro.data.list_states(game),1)[0]
+                while state=="GreenHillZone.Act1":
+                    state = np.random.choice(retro.data.list_states(game),1)[0]
                 print("Playing",game,"-",state)
                 #env = AllowBacktracking(retro.make(game, state,scenario="scenario.json", record="logs/"))
                 env = retro.make(game, state,scenario="scenario.json", record="logs/")
@@ -157,6 +173,7 @@ def main():
                 done = False
                 total_raw_reward = 0.0
                 Q= np.empty([])
+                last_info=dict([])
                 #Observation
                 for t in range(timesteps):
                     #env.render() #display training
@@ -168,8 +185,10 @@ def main():
                     reward_hold = np.zeros(hold_action)
                     for h in range(hold_action):
                         obs, reward_hold[h], done, info = env.step(action)     # result of action
-                    obs = np.array(obs)
-                    reward = sum(reward_hold)
+                    reward = reward_calc(last_info,info,done)
+                    info_dic=info
+                    obs = np.array(obs) #converts from Lazy format to normal numpy array see wrappers_atari.py
+                    #reward = sum(reward_hold)
                     reward_ = min(reward,reward_clip)
                     info = np.array(list(info.values()))
                     #Bellman double Q
@@ -197,7 +216,7 @@ def main():
 
                     if done:
                         obs = env.reset()           #restart game if done
-
+                    last_info=info_dic
                 #epsilon = min_random + (max_random-min_random)*np.exp(-rand_decay*(training_loop*sub_loops + sub_training_loop+1))
                 epsilon -=0.001
                 print("Total reward: {}".format(total_raw_reward))
