@@ -14,3 +14,6 @@ https://docs.google.com/document/d/1FfRHs4QKnmrgwm8_Vhxqn_ani7Tjs3JHfaGvekh4eUc/
 
 Tabelle:
 https://docs.google.com/spreadsheets/d/1Nkbii3tZ6rUeH2cN6AaIroSbuPboA5KldTQHbSimtcI/edit#gid=0
+
+Command to convert .bk2 to video:
+    python3 convertbk2-mp4.py logs/SonicTheHedgehog-Genesis-StarLightZone.Act1-000000.bk2
