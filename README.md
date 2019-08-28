@@ -8,3 +8,6 @@ Relevant links:
   Basis-Software:
 	  Wir werden unseren Code auf Gym-Retro basieren, das eine Basis-Umgebung für die Interaktion mit Megadrivespiele 
     wie Sonic anbietet. https://github.com/openai/retro
+
+
+https://docs.google.com/document/d/1FfRHs4QKnmrgwm8_Vhxqn_ani7Tjs3JHfaGvekh4eUc/edit
