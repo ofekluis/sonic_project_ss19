@@ -16,12 +16,17 @@ import atari_wrappers
 import gym
 import retro
 import copy
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from pprint import pprint
 #from retro_contest.local import make
 import effnet
 import time
 import tensorflow as tf
 from datetime import timedelta
 from sklearn.metrics import mean_squared_error
+
+
 ACTION_SIZE=8
 def write_log(callback, names, logs, batch_no):
     for name, value in zip(names, logs):
@@ -88,9 +93,21 @@ def main():
     #game = np.random.choice(games,1)[0]
     #env = retro.make(game, state,record='logs/')
     #env = AllowBacktracking(make(game, state)) #contest version
-
+    scope = ["https://spreadsheets.google.com/feeds",'https://www.googleapis.com/auth/spreadsheets',"https://www.googleapis.com/auth/drive.file","https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_name("Creds.json", scope)
+    client = gspread.authorize(creds)
+    sheet = client.open("SonicTable").sheet1  # Open the spreadhseet
+    data = sheet.get_all_records()  # Get a list of all records
+    numRows = sheet.row_count+1  # Get the number of rows in the sheet
+    print(numRows)
+    row = sheet.row_values(2)
+    print(row)
+    insertRow = [1, 7]
+    sheet.resize(1)
+    sheet.append_row(insertRow)
+    pprint (data)
     # Parameters
-    timesteps = 1000#4500
+    timesteps = 10#4500
     memory = deque(maxlen=30000)
     epsilon = 0.5                                #probability of doing a random move
     max_random = 1
@@ -98,8 +115,8 @@ def main():
     rand_decay = 1e-3                                #reduce the randomness by decay/loops
     gamma = 0.99                               #discount for future reward
     mb_size = 256                               #learning minibatch size
-    loops = 10#45                               #loop through the different game levels
-    sub_loops = 10#100
+    loops = 1#45                               #loop through the different game levels
+    sub_loops = 1#100
     hold_action = 1                            #nb frames during which we hold (4 for normal, 1 for contest)
     learning_rate = 5e-5
     max_reward = 0
