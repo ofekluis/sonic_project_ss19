@@ -16,6 +16,9 @@ import atari_wrappers
 import gym
 import retro
 import copy
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from pprint import pprint
 #from retro_contest.local import make
 import effnet
 import time
@@ -103,6 +106,22 @@ def main():
     #env = retro.make(game, state,record='logs/')
     #env = AllowBacktracking(make(game, state)) #contest version
 
+    #writing to spreadsheets
+    scope = ["https://spreadsheets.google.com/feeds",'https://www.googleapis.com/auth/spreadsheets',"https://www.googleapis.com/auth/drive.file","https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_name("Creds.json", scope)
+    client = gspread.authorize(creds)
+    sheet = client.open("SonicTable").sheet1  # Open the spreadhseet
+    data = sheet.get_all_records()  # Get a list of all records
+    numRows = sheet.row_count+1  # Get the number of rows in the sheet
+    print(numRows)
+    row = sheet.row_values(2)
+    print(row)
+    insertRow = [1, 7]
+    sheet.resize(1)
+    sheet.append_row(insertRow)
+    pprint (data)
+    #writing to spreadsheets
+
     # Parameters
     timesteps = 10000#4500
     memory = deque(maxlen=30000)
@@ -169,7 +188,6 @@ def main():
                 env = atari_wrappers.FrameStack(env,frames_stack)
                 env = SonicDiscretizer(env) #contest version
                 obs = env.reset() #game start
-
                 done = False
                 total_raw_reward = 0.0
                 Q= np.empty([])
