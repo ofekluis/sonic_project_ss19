@@ -62,7 +62,8 @@ def main():
     # Parameters
     timesteps = 20000#4500
     memory = deque(maxlen=30000)
-    epsilon = 0.5                                #probability of doing a random move
+    epsilon = 0.3                                #probability of doing a random move
+    epsilon_decay = 0.99  #will be multiplied with epsilon for decaying it
     max_random = 1
     min_random = 0.1                           #minimun randomness #r12
     rand_decay = 1e-3                                #reduce the randomness by decay/loops
@@ -140,7 +141,7 @@ def main():
                 #in this loop sonic only plays according to epsilon greedy and saves its experience
                 for t in range(timesteps):
                     #env.render() #display training
-                    if np.random.rand() > epsilon and Q.size==ACTION_SIZE:
+                    if np.random.rand() > epsilon and t>0:
                         Q = model.predict([obs[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
                         action = np.argmax(Q)
                     else:
@@ -165,7 +166,7 @@ def main():
                     last_info=info_dic
                 #epsilon = min_random + (max_random-min_random)*np.exp(-rand_decay*(training_loop*sub_loops + sub_training_loop+1))
                 if epsilon > 0.005:
-                    epsilon -=0.001
+                    epsilon*=epsilon_decay
                 print("Total reward: {}".format(total_raw_reward))
                 print("Avg. step reward: {}".format(total_raw_reward/timesteps))
                 print("Observation Finished",sub_training_loop+1,"x",training_loop+1,"out of",sub_loops,"x",loops)
@@ -212,6 +213,7 @@ def main():
                         inputs[i] = obs[np.newaxis,:]
                         info_inputs[i] = info
                         Q = model.predict([obs[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
+                        Q_next = model.predict([next_obs[np.newaxis,:],info[np.newaxis,:]])[0]
                         Q_target = target_model.predict([next_obs[np.newaxis,:],info[np.newaxis,:]])[0]
 
                         targets[i] = copy.copy(Q)
@@ -219,7 +221,7 @@ def main():
                         if done:
                             targets[i, action] = reward - reward_clip
                         else:
-                            targets[i, action] = reward + gamma * Q_target[np.argmax(Q)]
+                            targets[i, action] = reward + gamma * Q_target[np.argmax(Q_next)]
                     #train network on constructed inputs,targets
                     logs = model.train_on_batch([inputs, info_inputs], targets)
                     write_log(tensorboard, train_names, logs, training_loop*sub_loops + sub_training_loop)
