@@ -131,39 +131,34 @@ def main():
                 env = wrappers.FrameStack(env,frames_stack)
                 env = wrappers.SonicDiscretizer(env) # Discretize the environment for q learning
                 env = wrappers.RewardWrapper(env) # custom reward calculation
-                obs = env.reset() #game start
-
+                obs = np.array(env.reset()) #game start
                 done = False
                 total_raw_reward = 0.0
                 Q= np.empty([])
                 last_info=dict([])
                 #Observation
+                #in this loop sonic only plays according to epsilon greedy and saves its experience
                 for t in range(timesteps):
                     #env.render() #display training
                     if np.random.rand() > epsilon and Q.size==ACTION_SIZE:
-                        #pick a random action
                         action = np.argmax(Q)
                     else:
+                        #pick a random action
                         action = env.action_space.sample()
-                    obs, reward, done, info = env.step(action)     # result of action
+                    next_obs, reward, done, info = env.step(action)     # result of action
                     #reward = reward_calc(last_info,info,done)
                     info_dic=info
-                    obs = np.array(obs) #converts from Lazy format to normal numpy array see wrappers_atari.py
+                    info = np.array(list(info_dic.values()))
+                    next_obs = np.array(next_obs) #converts from Lazy format to normal numpy array see wrappers_atari.py
                     reward_ = min(reward,reward_clip)
-                    info = np.array(list(info.values()))
-                    #Bellman double Q
-                    Q = model.predict([obs[np.newaxis,:],info[np.newaxis,:]])          # Q-values predictions
-                    Q_target = target_model.predict([obs[np.newaxis,:],info[np.newaxis,:]])
-
-                    target_ = copy.copy(Q)
 
                     total_raw_reward += reward
 
                     max_reward = max(reward, max_reward)
                     min_reward = min(reward, min_reward)
+                    memory.append((obs, next_obs ,action, reward, done, info))
 
-                    memory.append((obs, action, reward, done, info))
-
+                    obs = next_obs
                     if done:
                         obs = env.reset()           #restart game if done
                     last_info=info_dic
@@ -203,10 +198,11 @@ def main():
                     diff=0
                     for i in range(0, mb_size):
                         obs = minibatch[i][0]
-                        action = minibatch[i][1]
-                        reward = minibatch[i][2]
-                        done = minibatch[i][3]
-                        info = minibatch[i][4]
+                        next_obs = minibatch[i][1]
+                        action = minibatch[i][2]
+                        reward = minibatch[i][3]
+                        done = minibatch[i][4]
+                        info = minibatch[i][5]
 
                         #reward clipping
                         reward = min(reward,reward_clip)
@@ -215,7 +211,7 @@ def main():
                         inputs[i] = obs[np.newaxis,:]
                         info_inputs[i] = info
                         Q = model.predict([obs[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
-                        Q_target = target_model.predict([obs[np.newaxis,:],info[np.newaxis,:]])[0]
+                        Q_target = target_model.predict([next_obs[np.newaxis,:],info[np.newaxis,:]])[0]
 
                         targets[i] = copy.copy(Q)
                         diff+=sum(Q-Q_target)
