@@ -60,7 +60,7 @@ def main():
     pprint (data)
 
     # Parameters
-    timesteps = 6000#4500
+    timesteps = 20000#4500
     memory = deque(maxlen=30000)
     epsilon = 0.5                                #probability of doing a random move
     max_random = 1
@@ -141,6 +141,7 @@ def main():
                 for t in range(timesteps):
                     #env.render() #display training
                     if np.random.rand() > epsilon and Q.size==ACTION_SIZE:
+                        Q = model.predict([obs[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
                         action = np.argmax(Q)
                     else:
                         #pick a random action
@@ -228,7 +229,7 @@ def main():
                     print("Model minibatch training lasted:",
                           str(timedelta(seconds=time.time()-minibatch_train_start_time)),"dd:hh:mm:ss")
                     print("Learning Finished",sub_training_loop+1,"x",training_loop+1,"out of",sub_loops,"x",loops)
-                    if diff/mb_size < 0.00000000001 and training_loop > 5:
+                    if diff/mb_size < 0.000000000001 and training_loop > 5:
                         # if there is not much difference in a batch after some
                         # training assume convergance
                         converged = True
