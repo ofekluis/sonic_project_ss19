@@ -60,7 +60,7 @@ def main():
     pprint (data)
 
     # Parameters
-    timesteps = 20000#4500
+    timesteps = 6000#4500
     memory = deque(maxlen=30000)
     epsilon = 0.3                                #probability of doing a random move
     epsilon_decay = 0.99  #will be multiplied with epsilon for decaying it
@@ -69,9 +69,8 @@ def main():
     rand_decay = 1e-3                                #reduce the randomness by decay/loops
     gamma = 0.99                               #discount for future reward
     mb_size = 256                               #learning minibatch size
-    loops = 10#45                               #loop through the different game levels
-    sub_loops = 10#100
-    hold_action = 1                            #nb frames during which we hold (4 for normal, 1 for contest)
+    loops = 35#45                               #loop through the different game levels
+    sub_loops = 35#100
     learning_rate = 5e-5
     max_reward = 0
     min_reward = 10000
@@ -79,18 +78,16 @@ def main():
     #action_threshold = 1
     target_step_interval = 10
     reward_clip = 200
-    resize_to = [128,128]
+    image_size = (128,128,frames_stack)
     save_factor= 500 # when to save the model according to loops_count
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True # pylint: disable=E1101
     converged=False # flag to check convergence (diff between Q and Q_target is small enough)
     with tf.Session(config=config) as sess:
-        model=effnet.Effnet(input_shape=(84,84,frames_stack),nb_classes=ACTION_SIZE, info=11)
+        model=effnet.Effnet(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
         if os.path.isfile("sonic_model.h5"):
             model.load_weights("sonic_model.h5")
-
         model.compile(loss="mse", optimizer=optimizers.Adam(lr=learning_rate), metrics=["accuracy"])
-
         tensorboard = TensorBoard(log_dir="logs/sonic_modmemdecayrdq18_reshape_64x512mb256_resc_target_interval_{}_memory_30000_lr_{}_decay_{}.{}".format(target_step_interval,learning_rate, rand_decay, time.time()))
         tensorboard.set_model(model)
         train_names = ["Loss", "Accuracy"]
@@ -108,6 +105,8 @@ def main():
     for training_loop in range(loops):
         if converged:
             # model converged
+            model.save_weights("sonic_model.h5")
+            model.save_weights("sonic_target_model.h5")
             print("Model converged, stopping training")
             break
         with tf.Session(config=config) as sess:
@@ -118,7 +117,6 @@ def main():
             target_model.load_weights("sonic_target_model.h5")
             target_model.trainable = False
             target_model.compile(loss="mse", optimizer=optimizers.Adam(lr=learning_rate), metrics=["accuracy"])
-
             for sub_training_loop in range(sub_loops):
                 loop_start_time = time.time()
                 game = np.random.choice(games,1)[0]
@@ -128,7 +126,7 @@ def main():
                 print("Playing",game,"-",state)
                 #env = AllowBacktracking(retro.make(game, state,scenario="scenario.json", record="logs/"))
                 env = retro.make(game, state,scenario="scenario.json", record="logs/")
-                env = wrappers.WarpFrame(env, 84, 84, grayscale=True)
+                env = wrappers.WarpFrame(env, 128, 128, grayscale=True)
                 env = wrappers.FrameStack(env,frames_stack)
                 env = wrappers.SonicDiscretizer(env) # Discretize the environment for q learning
                 env = wrappers.RewardWrapper(env) # custom reward calculation
@@ -141,17 +139,15 @@ def main():
                 #in this loop sonic only plays according to epsilon greedy and saves its experience
                 for t in range(timesteps):
                     #env.render() #display training
-                    if np.random.rand() > epsilon and t>0:
-                        Q = model.predict([obs[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
+                    if np.random.rand() > epsilon and sub_training_loop>0:
+                        Q = model.predict([np.array(obs)[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
                         action = np.argmax(Q)
                     else:
                         #pick a random action
                         action = env.action_space.sample()
                     next_obs, reward, done, info = env.step(action)     # result of action
-                    #reward = reward_calc(last_info,info,done)
                     info_dic=info
                     info = np.array(list(info_dic.values()))
-                    next_obs = np.array(next_obs) #converts from Lazy format to normal numpy array see wrappers_atari.py
                     reward_ = min(reward,reward_clip)
 
                     total_raw_reward += reward
@@ -179,7 +175,7 @@ def main():
                     minibatch = random.sample(memory, mb_size)
 
                     info_inputs = np.zeros((mb_size,11))
-                    inputs_shape = (mb_size,) + obs.shape
+                    inputs_shape = (mb_size,) + image_size
                     inputs = np.zeros(inputs_shape)
                     targets = np.zeros((mb_size, env.action_space.n))
 
@@ -198,24 +194,15 @@ def main():
                         target_model.trainable = False
                         target_model.compile(loss="mse", optimizer=optimizers.Adam(lr=learning_rate), metrics=["accuracy"])
                     diff=0
-                    for i in range(0, mb_size):
-                        obs = minibatch[i][0]
-                        next_obs = minibatch[i][1]
-                        action = minibatch[i][2]
-                        reward = minibatch[i][3]
-                        done = minibatch[i][4]
-                        info = minibatch[i][5]
-
-                        #reward clipping
+                    for i,(obs,next_obs,action,reward,done,info) in enumerate(minibatch):
                         reward = min(reward,reward_clip)
-
-                        #Bellman double Q
-                        inputs[i] = obs[np.newaxis,:]
+                        obs=np.array(obs)
+                        next_obs=np.array(next_obs)
+                        inputs[i] = obs
                         info_inputs[i] = info
                         Q = model.predict([obs[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
                         Q_next = model.predict([next_obs[np.newaxis,:],info[np.newaxis,:]])[0]
                         Q_target = target_model.predict([next_obs[np.newaxis,:],info[np.newaxis,:]])[0]
-
                         targets[i] = copy.copy(Q)
                         diff+=sum(Q-Q_target)
                         if done:
@@ -231,7 +218,7 @@ def main():
                     print("Model minibatch training lasted:",
                           str(timedelta(seconds=time.time()-minibatch_train_start_time)),"dd:hh:mm:ss")
                     print("Learning Finished",sub_training_loop+1,"x",training_loop+1,"out of",sub_loops,"x",loops)
-                    if diff/mb_size < 0.000000000001 and training_loop > 5:
+                    if diff/mb_size < 0.000000000000001 and training_loop > 5:
                         # if there is not much difference in a batch after some
                         # training assume convergance
                         converged = True
