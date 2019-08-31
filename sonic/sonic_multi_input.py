@@ -17,7 +17,7 @@ import gym
 import retro
 import copy
 #from retro_contest.local import make
-import effnet
+import model as m
 import time
 import tensorflow as tf
 from datetime import timedelta
@@ -60,10 +60,10 @@ def main():
     pprint (data)
 
     # Parameters
-    timesteps = 6000#4500
+    timesteps = 10000#4500
     memory = deque(maxlen=30000)
     epsilon = 0.3                                #probability of doing a random move
-    epsilon_decay = 0.99  #will be multiplied with epsilon for decaying it
+    epsilon_decay = 0.9999  #will be multiplied with epsilon for decaying it
     max_random = 1
     min_random = 0.1                           #minimun randomness #r12
     rand_decay = 1e-3                                #reduce the randomness by decay/loops
@@ -84,7 +84,7 @@ def main():
     config.gpu_options.allow_growth = True # pylint: disable=E1101
     converged=False # flag to check convergence (diff between Q and Q_target is small enough)
     with tf.Session(config=config) as sess:
-        model=effnet.Effnet(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
+        model=m.ddqn_model(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
         if os.path.isfile("sonic_model.h5"):
             model.load_weights("sonic_model.h5")
         model.compile(loss="mse", optimizer=optimizers.Adam(lr=learning_rate), metrics=["accuracy"])
