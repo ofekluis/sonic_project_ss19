@@ -1,6 +1,6 @@
 import gym
 import numpy as np
-from collections import deque
+from collections import deque,defaultdict
 from gym import spaces
 import cv2
 cv2.ocl.setUseOpenCL(False)
@@ -34,30 +34,41 @@ class ClipActionsWrapper(gym.Wrapper):
 class RewardWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
+        self.steps=0
         self.last_info=dict([])
+        #stores the max x coordinates reached for each level
+        self.max_x=0
     def reset(self, **kwargs):
         self.last_info = dict([])
+        self.steps=0
         return self.env.reset(**kwargs)
     def step(self, action):
         obs, rew, done, info = self.env.step(action)
         rew=0 # ignore default rew and calculate one based on info and last_info
-        if len(self.last_info) > 0:
+        if len(self.last_info) > 0 and info["screen_x_end"]!=0:
             # no reward estimation for first step
             if info["level_end_bonus"] > 0:
                 # happens only if level is won
                 rew+=5000
             if info["x"] > self.last_info["x"]:
                 rew+=10
-            if info["x"] == self.last_info["x"]:
-                # motivate movement on the x axis
+            if info["x"] == self.last_info["x"] and info["y"] == self.last_info["y"]:
+                #motivate movement
                 rew-=1
             if info["lives"] < self.last_info["lives"]:
-                rew-=100
-            if info["rings"] > self.last_info["rings"]:
-                rew+=20
+                rew-=50
+                self.last_life_lost=self.steps
+            if info["rings"] > self.last_info["rings"] or \
+                    info["score"] > self.last_info["score"]:
+                rew+=10
             if self.last_info["rings"] > 0 and info["rings"] == 0:
                 # if we were attacked and lost all rings
                 rew-=30
+            if info["x"] > self.max_x:
+                #if this point was the farthest we've reached in this level (in these t timesteps)
+                rew+=10
+                self.max_x = info["x"]
+        self.steps+=1
         self.last_info = info
         return obs, rew, done, info
 

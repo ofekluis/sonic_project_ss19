@@ -1,10 +1,7 @@
-import keras
-from keras.models import Sequential
-from keras.layers import Dense, Conv2D, Flatten, Dropout
 from keras import optimizers
 from keras.models import load_model
 from keras.models import model_from_json
-from collections import deque
+from collections import deque,defaultdict
 from keras.callbacks import TensorBoard
 from skimage import color
 from skimage.transform import resize
@@ -63,7 +60,7 @@ def main():
     timesteps = 10000#4500
     memory = deque(maxlen=30000)
     epsilon = 0.3                                #probability of doing a random move
-    epsilon_decay = 0.9999  #will be multiplied with epsilon for decaying it
+    epsilon_decay = 0.999  #will be multiplied with epsilon for decaying it
     max_random = 1
     min_random = 0.1                           #minimun randomness #r12
     rand_decay = 1e-3                                #reduce the randomness by decay/loops
@@ -77,9 +74,9 @@ def main():
     frames_stack=4 # how many frames to be stacked together
     #action_threshold = 1
     target_step_interval = 10
-    reward_clip = 200
+    reward_clip = 1000 #maximum reward allowed for step
     image_size = (128,128,frames_stack)
-    save_factor= 500 # when to save the model according to loops_count
+    save_factor= 500000 # when to save the model according in game steps
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True # pylint: disable=E1101
     converged=False # flag to check convergence (diff between Q and Q_target is small enough)
@@ -101,11 +98,13 @@ def main():
         model.save_weights("sonic_target_model.h5")
 
         #env.close()
-
+    game = "SonicTheHedgehog-Genesis"#np.random.choice(games,1)[0]
+    #train on all but the first level, which is reserved for testing
+    states = retro.data.list_states(game)[1:]
+    max_x = defaultdict(lambda: 0.0)
     for training_loop in range(loops):
         if converged:
             # model converged
-            model.save_weights("sonic_model.h5")
             model.save_weights("sonic_target_model.h5")
             print("Model converged, stopping training")
             break
@@ -119,12 +118,9 @@ def main():
             target_model.compile(loss="mse", optimizer=optimizers.Adam(lr=learning_rate), metrics=["accuracy"])
             for sub_training_loop in range(sub_loops):
                 loop_start_time = time.time()
-                game = np.random.choice(games,1)[0]
-                state = np.random.choice(retro.data.list_states(game),1)[0]
-                while state=="GreenHillZone.Act1":
-                    state = np.random.choice(retro.data.list_states(game),1)[0]
+                #pick a level to train on randomly
+                state = np.random.choice(states,1)[0]
                 print("Playing",game,"-",state)
-                #env = AllowBacktracking(retro.make(game, state,scenario="scenario.json", record="logs/"))
                 env = retro.make(game, state,scenario="scenario.json", record="logs/")
                 env = wrappers.WarpFrame(env, 128, 128, grayscale=True)
                 env = wrappers.FrameStack(env,frames_stack)
@@ -151,20 +147,26 @@ def main():
                     reward_ = min(reward,reward_clip)
 
                     total_raw_reward += reward
-
                     max_reward = max(reward, max_reward)
                     min_reward = min(reward, min_reward)
+                    lvl= (info_dic["zone"],info_dic["act"])
+                    if env.max_x > max_x[lvl]:
+                        # if this is the farthest we've ever reached in this level
+                        max_x[lvl] = env.max_x
+                        reward+=20
                     memory.append((obs, next_obs ,action, reward, done, info))
 
                     obs = next_obs
                     if done:
                         obs = env.reset()           #restart game if done
                     last_info=info_dic
-                #epsilon = min_random + (max_random-min_random)*np.exp(-rand_decay*(training_loop*sub_loops + sub_training_loop+1))
+                #decay epsilon
                 if epsilon > 0.005:
                     epsilon*=epsilon_decay
                 print("Total reward: {}".format(total_raw_reward))
                 print("Avg. step reward: {}".format(total_raw_reward/timesteps))
+                print("Max distance on x axis: ", max_x[(info_dic["zone"],info_dic["act"])])
+                print("Current max distance on x axis: ", env.max_x)
                 print("Observation Finished",sub_training_loop+1,"x",training_loop+1,"out of",sub_loops,"x",loops)
 
                 # Learning
@@ -179,27 +181,28 @@ def main():
                     inputs = np.zeros(inputs_shape)
                     targets = np.zeros((mb_size, env.action_space.n))
 
-                    #double Q: fix the target for a time to stabilise the model
+                    # load a new target model every target_step_interval
+                    # training loops and leave it unchanged 'till the lext
+                    # interval
                     if (sub_training_loop+1)%target_step_interval == 0:# and training_loop*sub_loops + sub_training_loop+1 >= 100: #r12 chase score first
-                        #with tf.device('/cpu:0'):
-                        # serialize weights to HDF5
-                        #model.save_weights("sonic_model.h5")
                         model.save_weights("sonic_target_model.h5")
-                        loops_count= training_loop*sub_loops + sub_training_loop+1
+                        loops_count= training_loop*sub_training_loop*timesteps
                         if loops_count % save_factor == 0:
-                            model.save_weights("sonic_model_"+ loops__count+".h5")
-                        # create model from json and do inference on cpu
+                            model.save_weights("sonic_model_"+ str(loops_count)+".h5")
                         target_model = model_from_json(model_json)
                         target_model.load_weights("sonic_target_model.h5")
                         target_model.trainable = False
                         target_model.compile(loss="mse", optimizer=optimizers.Adam(lr=learning_rate), metrics=["accuracy"])
                     diff=0
+                    #preparing batch to send into the NN for learning, using bellman's double Q
+                    #for the Q estimation
                     for i,(obs,next_obs,action,reward,done,info) in enumerate(minibatch):
                         reward = min(reward,reward_clip)
                         obs=np.array(obs)
                         next_obs=np.array(next_obs)
                         inputs[i] = obs
                         info_inputs[i] = info
+                        # double Q
                         Q = model.predict([obs[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
                         Q_next = model.predict([next_obs[np.newaxis,:],info[np.newaxis,:]])[0]
                         Q_target = target_model.predict([next_obs[np.newaxis,:],info[np.newaxis,:]])[0]
@@ -218,6 +221,7 @@ def main():
                     print("Model minibatch training lasted:",
                           str(timedelta(seconds=time.time()-minibatch_train_start_time)),"dd:hh:mm:ss")
                     print("Learning Finished",sub_training_loop+1,"x",training_loop+1,"out of",sub_loops,"x",loops)
+
                     if diff/mb_size < 0.000000000000001 and training_loop > 5:
                         # if there is not much difference in a batch after some
                         # training assume convergance

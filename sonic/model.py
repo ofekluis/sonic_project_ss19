@@ -21,15 +21,15 @@ def ddqn_model(input_shape, nb_classes, info = None, include_top=True, weights=N
 
     #predict a q value for each possible action in the state
     adv_dense =  Dense(512, activation="relu", kernel_initializer='glorot_uniform')(x)
-    advantage = Dense(nb_classes, activation="relu", kernel_initializer='glorot_uniform')(adv_dense)
+    advantage = Dense(nb_classes, activation="linear", kernel_initializer='glorot_uniform')(adv_dense)
 
     #predict one state value for the state
     v_dense = Dense(512, activation="relu", kernel_initializer='glorot_uniform')(x)
-    value = Dense(1, activation="relu", kernel_initializer='glorot_uniform')(v_dense)
+    value = Dense(1, activation="linear", kernel_initializer='glorot_uniform')(v_dense)
 
     # concatenate state value and advantage by adding the normalized action value to
     # the state value for each action
-    x =  Lambda(lambda x: x[0]- K.mean(x[0])+x[1])([advantage, value])
+    x =  Lambda(lambda x: x[0]- K.mean(x[0], axis=1, keepdims=True)+x[1])([advantage, value])
 
     model = Model(inputs=[x_in,info_input], outputs=x)
 

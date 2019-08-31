@@ -1,5 +1,4 @@
 import sys
-import keras
 from keras.models import Sequential
 from keras.layers import Dense, Conv2D, Flatten, Dropout
 from keras import optimizers
@@ -9,12 +8,12 @@ import numpy as np
 import wrappers
 import gym
 import retro
-import effnet
+import model as m
 import os
 frames_stack=4
 ACTION_SIZE=8
 learning_rate = 5e-5
-target_model = effnet.Effnet(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
+target_model = m.ddqn_model(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
 if os.path.isfile("sonic_target_model.h5"):
     target_model.load_weights("sonic_target_model.h5")
 else:
@@ -38,18 +37,16 @@ obs = env.reset() #game start
 obs = np.array(obs) #converts from Lazy format to normal numpy array see wrappers_atari.py
 timesteps=10000
 for t in range(timesteps):
-    if t%50==0:
-        action = env.action_space.sample()
+    if t%50:
+        action = 1#env.action_space.sample()
     else:
         Q = target_model.predict([obs[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
 
         action = np.argmax(Q)
-    for i in range(4):
-        next_obs, reward, done, info = env.step(action)     # result of action
-        info = np.array(list(info.values()))
+    next_obs, reward, done, info = env.step(action)     # result of action
+    info = np.array(list(info.values()))
     next_obs = np.array(next_obs) #converts from Lazy format to normal numpy array see wrappers_atari.py
     obs=next_obs
-    print(info)
     if done:
         obs = env.reset()           #restart game if done
 
