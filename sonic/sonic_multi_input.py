@@ -42,6 +42,11 @@ def main():
 
     games = ["SonicTheHedgehog-Genesis"]
 
+    #delete old weights
+    #os.remove("sonic_model_0.h5")
+    #os.remove("sonic_model.h5")
+    #os.remove("sonic_target_model.h5")
+
     #writing to spreadsheets
     scope = ["https://spreadsheets.google.com/feeds",'https://www.googleapis.com/auth/spreadsheets',"https://www.googleapis.com/auth/drive.file","https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_name("Creds.json", scope)
@@ -53,6 +58,13 @@ def main():
     row = sheet.row_values(2)
     #insertRow = [1, 7]
     sheet.resize(numRows)
+    training=int(sheet.cell(sheet.row_count,1).value)+1
+    training_folder='Training_'+str(training)
+    retval = os.getcwd()
+    print(retval)
+    os.chdir(retval+"/logs")
+    os.mkdir(training_folder)
+    os.chdir("..")
     #sheet.append_row(insertRow)
     #pprint (data)
 
@@ -85,7 +97,7 @@ def main():
         if os.path.isfile("sonic_model.h5"):
             model.load_weights("sonic_model.h5")
         model.compile(loss="mse", optimizer=optimizers.Adam(lr=learning_rate), metrics=["accuracy"])
-        tensorboard = TensorBoard(log_dir="logs/sonic_modmemdecayrdq18_reshape_64x512mb256_resc_target_interval_{}_memory_30000_lr_{}_decay_{}.{}".format(target_step_interval,learning_rate, rand_decay, time.time()))
+        tensorboard = TensorBoard(log_dir="logs/"+training_folder+"/sonic_modmemdecayrdq18_reshape_64x512mb256_resc_target_interval_{}_memory_30000_lr_{}_decay_{}.{}".format(target_step_interval,learning_rate, rand_decay, time.time()))
         tensorboard.set_model(model)
         train_names = ["Loss", "Accuracy"]
 
@@ -121,7 +133,7 @@ def main():
                 #pick a level to train on randomly
                 state = np.random.choice(states,1)[0]
                 print("Playing",game,"-",state)
-                env = retro.make(game, state,scenario="scenario.json", record="logs/")
+                env = retro.make(game, state,scenario="scenario.json", record="logs/"+training_folder)
                 env = wrappers.WarpFrame(env, 128, 128, grayscale=True)
                 env = wrappers.FrameStack(env,frames_stack)
                 env = wrappers.SonicDiscretizer(env) # Discretize the environment for q learning
@@ -234,22 +246,31 @@ def main():
                 print("Rewards between",min_reward,"and",max_reward)
                 print("Percentage of random movements set to", epsilon * 100, "%\n")
                 flag= False
+                #TODO: Check level finished or not + current date for statistics
+                completed_level=False
+                date="Today"
+                #
                 if flag ==False:
                     print(sheet.cell(sheet.row_count,1).value)
-                    training=int(sheet.cell(sheet.row_count,1).value)+1
                     print(type(training))
                     flag ==True
-                    insertRow = [training,game,state, epsilon,loops,sub_loops,gamma,min_reward,max_reward,timesteps,learning_rate, frames_stack]
+                    insertRow = [training,game,state, epsilon,loops,sub_loops,gamma,min_reward,max_reward,total_raw_reward,timesteps,learning_rate, frames_stack,completed_level]
                     #sheet.resize(1)
                     sheet.append_row(insertRow)
                 else:
-                    insertRow = [training,game,state,epsilon,loops,sub_loops,gamma,min_reward,max_reward,timesteps, learning_rate, frames_stack]
+                    insertRow = [training,game,state,epsilon,loops,sub_loops,gamma,min_reward,max_reward,timesteps, learning_rate, frames_stack,completed_level]
                     #sheet.resize(1)
                     sheet.append_row(insertRow)
-
+def converBK2toMovie():
+    os.chdir("logs/"+training_folder)
+    directory = os.fsencode(directory_in_str)
+    for file in os.listdir(directory):
+        os.system('python3 convertbk2-mp4.py'+file)
 
 if __name__ == '__main__':
     main()
+    converBK2toMovie()
+
     evaluationScript.main()
 
 
