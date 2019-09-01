@@ -6,6 +6,7 @@ from keras.callbacks import TensorBoard
 from skimage import color
 from skimage.transform import resize
 #import gym_remote.exceptions as gre
+import evaluationScript
 import os
 import random
 import numpy as np
@@ -47,14 +48,13 @@ def main():
     client = gspread.authorize(creds)
     sheet = client.open("SonicTable").sheet1  # Open the spreadhseet
     data = sheet.get_all_records()  # Get a list of all records
-    numRows = sheet.row_count+1  # Get the number of rows in the sheet
+    numRows = sheet.row_count  # Get the number of rows in the sheet
     print(numRows)
     row = sheet.row_values(2)
-    print(row)
-    insertRow = [1, 7]
-    sheet.resize(1)
-    sheet.append_row(insertRow)
-    pprint (data)
+    #insertRow = [1, 7]
+    sheet.resize(numRows)
+    #sheet.append_row(insertRow)
+    #pprint (data)
 
     # Parameters
     timesteps = 10000#4500
@@ -233,8 +233,23 @@ def main():
                 print("Training lasted:",str(timedelta(seconds=time.time()-start_time)),"dd:hh:mm:ss")
                 print("Rewards between",min_reward,"and",max_reward)
                 print("Percentage of random movements set to", epsilon * 100, "%\n")
+                flag= False
+                if flag ==False:
+                    print(sheet.cell(sheet.row_count,1).value)
+                    training=int(sheet.cell(sheet.row_count,1).value)+1
+                    print(type(training))
+                    flag ==True
+                    insertRow = [training,game,state, epsilon,loops,sub_loops,gamma,min_reward,max_reward,timesteps,learning_rate, frames_stack]
+                    #sheet.resize(1)
+                    sheet.append_row(insertRow)
+                else:
+                    insertRow = [training,game,state,epsilon,loops,sub_loops,gamma,min_reward,max_reward,timesteps, learning_rate, frames_stack]
+                    #sheet.resize(1)
+                    sheet.append_row(insertRow)
+
 
 if __name__ == '__main__':
     main()
+    evaluationScript.main()
 
 
