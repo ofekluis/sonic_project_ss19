@@ -70,7 +70,7 @@ def main():
     #pprint (data)
 
     # Parameters
-    timesteps = 10000#4500
+    timesteps = 1000#4500
     memory = deque(maxlen=30000)
     epsilon = 0.3                                #probability of doing a random move
     epsilon_decay = 0.999  #will be multiplied with epsilon for decaying it
@@ -79,7 +79,7 @@ def main():
     rand_decay = 1e-3                                #reduce the randomness by decay/loops
     gamma = 0.99                               #discount for future reward
     mb_size = 256                               #learning minibatch size
-    experiments = 50 #number of experiments to run
+    experiments = 5 #number of experiments to run
     learning_rate = 5e-5
     max_reward = 0
     min_reward = 10000
@@ -114,6 +114,8 @@ def main():
     #train on all but the first level, which is reserved for testing
     states = retro.data.list_states(game)[1:]
     max_x = defaultdict(lambda: 0.0)
+    avg_reward_List=[]
+    total_total_rew=0
     for e in range(experiments):
         with tf.Session(config=config) as sess:
             if converged:
@@ -171,6 +173,14 @@ def main():
                 if done:
                     obs = env.reset()           #restart game if done
                 last_info=info_dic
+                #todo initalize vars
+                total_total_rew+=total_total_rew
+                total_steps=(e+1)*timesteps
+                total_avg_reward= total_total_rew/total_steps
+                avg_reward_List.append(total_avg_reward)
+                #to calculate coinfidence interval
+
+
                 #decay epsilon
             if epsilon > 0.005:
                 epsilon*=epsilon_decay
@@ -247,20 +257,20 @@ def main():
                 #TODO: Check level finished or not + current date for statistics
                 completed_level=False
                 date="Today"
-                #
-                """
+                
                 if flag ==False:
                     print(sheet.cell(sheet.row_count,1).value)
                     print(type(training))
                     flag ==True
-                    insertRow = [training,game,state, epsilon,loops,sub_loops,gamma,min_reward,max_reward,total_raw_reward,timesteps,learning_rate, frames_stack,completed_level]
+                    insertRow = [training,game,state, epsilon,experiments,gamma,min_reward,max_reward,total_raw_reward,timesteps,learning_rate, frames_stack,completed_level]
                     #sheet.resize(1)
                     sheet.append_row(insertRow)
                 else:
-                    insertRow = [training,game,state,epsilon,loops,sub_loops,gamma,min_reward,max_reward,timesteps, learning_rate, frames_stack,completed_level]
+                    insertRow = [training,game,state,epsilon,experiments,gamma,min_reward,max_reward,timesteps, learning_rate, frames_stack,completed_level]
                     #sheet.resize(1)
                     sheet.append_row(insertRow)
-                """
+
+
 def converBK2toMovie():
     os.chdir("logs/"+training_folder)
     directory = os.fsencode(directory_in_str)
