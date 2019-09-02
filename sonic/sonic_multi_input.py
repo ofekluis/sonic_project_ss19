@@ -69,9 +69,9 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
     # Parameters
     #global timesteps
     #timesteps = 1000#4500
-    memory = deque(maxlen=30000)
+    memory = deque(maxlen=10000)
     #global epsilon
-    eps = epsilon 
+    eps = epsilon
     global epsilon_decay                               #probability of doing a random move
     epsilon_decay = 0.999  #will be multiplied with epsilon for decaying it
     max_random = 1
@@ -171,8 +171,9 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                     # if this is the farthest we've ever reached in this level
                     max_x[lvl] = env.max_x
                     reward+=20
-                memory.append((obs, next_obs ,action, reward, done, info))
-
+                if (np.random.rand()<0.33) or reward > 900:
+                    #don't save all states since memory is limited and went experience from different levels in training
+                    memory.append((obs, next_obs ,action, reward, done, info))
                 obs = next_obs
                 if done:
                     obs = env.reset()           #restart game if done
@@ -265,7 +266,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                 completed_level=False
                 date="Today"
                 if info_dic["level_end_bonus"] > 0:
-                    completed_level=True          
+                    completed_level=True
                 if flag ==False:
                     print(sheet.cell(sheet.row_count,1).value)
                     print(type(training))

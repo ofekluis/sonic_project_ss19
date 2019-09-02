@@ -40,6 +40,7 @@ class RewardWrapper(gym.Wrapper):
         self.max_x=0
     def reset(self, **kwargs):
         self.last_info = dict([])
+        self.max_x=0
         self.steps=0
         return self.env.reset(**kwargs)
     def step(self, action):
@@ -66,7 +67,7 @@ class RewardWrapper(gym.Wrapper):
                 rew-=30
             if info["x"] > self.max_x:
                 #if this point was the farthest we've reached in this level (in these t timesteps)
-                rew+=10
+                rew+=2
                 self.max_x = info["x"]
         self.steps+=1
         self.last_info = info
