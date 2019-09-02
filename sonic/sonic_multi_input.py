@@ -36,7 +36,7 @@ def write_log(callback, names, logs, batch_no):
 
 
 #end of env specific
-def main():
+def main(epsilon,experiments,timesteps,mb_size,frames_stack):
 
     start_time = time.time()
 
@@ -54,11 +54,10 @@ def main():
     sheet = client.open("SonicTable").sheet1  # Open the spreadhseet
     data = sheet.get_all_records()  # Get a list of all records
     numRows = sheet.row_count  # Get the number of rows in the sheet
-    print(numRows)
     row = sheet.row_values(2)
-    #insertRow = [1, 7]
     sheet.resize(numRows)
     training=int(sheet.cell(sheet.row_count,1).value)+1
+    global training_folder
     training_folder='Training_'+str(training)
     retval = os.getcwd()
     print(retval)
@@ -66,24 +65,26 @@ def main():
     if not os.path.isdir(training_folder):
         os.mkdir(training_folder)
     os.chdir("..")
-    #sheet.append_row(insertRow)
-    #pprint (data)
 
     # Parameters
-    timesteps = 1000#4500
+    #global timesteps
+    #timesteps = 1000#4500
     memory = deque(maxlen=30000)
-    epsilon = 0.3                                #probability of doing a random move
+    #global epsilon
+    eps = epsilon 
+    global epsilon_decay                               #probability of doing a random move
     epsilon_decay = 0.999  #will be multiplied with epsilon for decaying it
     max_random = 1
     min_random = 0.1                           #minimun randomness #r12
     rand_decay = 1e-3                                #reduce the randomness by decay/loops
     gamma = 0.99                               #discount for future reward
-    mb_size = 256                               #learning minibatch size
-    experiments = 5 #number of experiments to run
+    #mb_size = 256
+    #global experiments                             #learning minibatch size
+    #experiments = 3 #number of experiments to run
     learning_rate = 5e-5
     max_reward = 0
     min_reward = 10000
-    frames_stack=4 # how many frames to be stacked together
+    #frames_stack=4 # how many frames to be stacked together
     #action_threshold = 1
     target_step_interval = 10
     reward_clip = 1000 #maximum reward allowed for step
@@ -116,6 +117,8 @@ def main():
     max_x = defaultdict(lambda: 0.0)
     avg_reward_List=[]
     total_total_rew=0
+    global rewardList
+    rewardList=[]
     for e in range(experiments):
         with tf.Session(config=config) as sess:
             if converged:
@@ -134,7 +137,7 @@ def main():
             #pick a level to train on randomly
             state = np.random.choice(states,1)[0]
             print("Playing",game,"-",state)
-            env = retro.make(game, state,scenario="scenario.json", record="logs/")
+            env = retro.make(game, state,scenario="scenario.json", record="logs/"+training_folder)
             env = wrappers.WarpFrame(env, 128, 128, grayscale=True)
             env = wrappers.FrameStack(env,frames_stack)
             env = wrappers.SonicDiscretizer(env) # Discretize the environment for q learning
@@ -144,6 +147,7 @@ def main():
             total_raw_reward = 0.0
             Q= np.empty([])
             last_info=dict([])
+            experiementRewardList=[]
             #Observation
             #in this loop sonic only plays according to epsilon greedy and saves its experience
             for t in range(timesteps):
@@ -174,16 +178,20 @@ def main():
                     obs = env.reset()           #restart game if done
                 last_info=info_dic
                 #todo initalize vars
-                total_total_rew+=total_total_rew
-                total_steps=(e+1)*timesteps
-                total_avg_reward= total_total_rew/total_steps
-                avg_reward_List.append(total_avg_reward)
-                #to calculate coinfidence interval
+                #total_total_rew+=total_total_rew
+                #total_steps=(e+1)*timesteps
+                #total_avg_reward= total_total_rew/total_steps
+                #avg_reward_List.append(total_avg_reward)
 
+                experiementRewardList.append(reward)
+                #to calculate coinfidence interval
+                #liste rewards von experiment
+                #liste von allen experiementen (liste von zeile drüber(Listen))
 
                 #decay epsilon
             if epsilon > 0.005:
                 epsilon*=epsilon_decay
+            rewardList.append(experiementRewardList)
             print("Total reward: {}".format(total_raw_reward))
             print("Avg. step reward: {}".format(total_raw_reward/timesteps))
             print("Max distance on x axis: ", max_x[(info_dic["zone"],info_dic["act"])])
@@ -254,33 +262,33 @@ def main():
                 print("Training lasted:",str(timedelta(seconds=time.time()-start_time)),"dd:hh:mm:ss")
                 print("Rewards between",min_reward,"and",max_reward)
                 flag= False
-                #TODO: Check level finished or not + current date for statistics
                 completed_level=False
                 date="Today"
-                
+                if info_dic["level_end_bonus"] > 0:
+                    completed_level=True          
                 if flag ==False:
                     print(sheet.cell(sheet.row_count,1).value)
                     print(type(training))
                     flag ==True
-                    insertRow = [training,game,state, epsilon,experiments,gamma,min_reward,max_reward,total_raw_reward,timesteps,learning_rate, frames_stack,completed_level]
+                    insertRow = [training,game,state, eps,experiments,gamma,min_reward,max_reward,total_raw_reward,timesteps,learning_rate, frames_stack,completed_level]
                     #sheet.resize(1)
                     sheet.append_row(insertRow)
                 else:
-                    insertRow = [training,game,state,epsilon,experiments,gamma,min_reward,max_reward,timesteps, learning_rate, frames_stack,completed_level]
+                    insertRow = [training,game,state,eps,experiments,gamma,min_reward,max_reward,timesteps, learning_rate, frames_stack,completed_level]
                     #sheet.resize(1)
                     sheet.append_row(insertRow)
 
 
-def converBK2toMovie():
+def convertBK2toMovie():
     os.chdir("logs/"+training_folder)
-    directory = os.fsencode(directory_in_str)
+    directory = os.fsencode(os.getcwd())
     for file in os.listdir(directory):
-        os.system('python3 convertbk2-mp4.py'+file)
+        os.system('python3 convertbk2-mp4.py '+str(file))
 
 if __name__ == '__main__':
     main()
-    converBK2toMovie()
+    #convertBK2toMovie() #not working yet, needs to be done
 
-    evaluationScript.main()
+    evaluationScript.main(rewardList,experiments,timesteps,eps,epsilon_decay)
 
 
