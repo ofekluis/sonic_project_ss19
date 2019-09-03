@@ -113,7 +113,8 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
         #env.close()
     game = "SonicTheHedgehog-Genesis"#np.random.choice(games,1)[0]
     #train on all but the first level, which is reserved for testing
-    states = retro.data.list_states(game)[1:]
+    #states = retro.data.list_states(game)[1:]
+    states = retro.data.list_states(game)
     max_x = defaultdict(lambda: 0.0)
     avg_reward_List=[]
     total_total_rew=0
@@ -148,6 +149,12 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
             Q= np.empty([])
             last_info=dict([])
             experiementRewardList=[]
+            gameList=[]
+            stateList=[]
+            minRewList=[]
+            maxRewList=[]
+            total_rewList=[]
+            completed_levelList=[]
             #Observation
             #in this loop sonic only plays according to epsilon greedy and saves its experience
             for t in range(timesteps):
@@ -262,22 +269,40 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                 print("Observation lasted:",str(timedelta(seconds=time.time()-loop_start_time)),"dd:hh:mm:ss")
                 print("Training lasted:",str(timedelta(seconds=time.time()-start_time)),"dd:hh:mm:ss")
                 print("Rewards between",min_reward,"and",max_reward)
-                flag= False
+                gameList.append(game)
+                stateList.append(state)
+                minRewList.append(min_reward)
+                maxRewList.append(max_reward)
+                total_rewList.append(total_raw_reward)
                 completed_level=False
-                date="Today"
                 if info_dic["level_end_bonus"] > 0:
                     completed_level=True
-                if flag ==False:
-                    print(sheet.cell(sheet.row_count,1).value)
-                    print(type(training))
-                    flag ==True
-                    insertRow = [training,game,state, eps,experiments,gamma,min_reward,max_reward,total_raw_reward,timesteps,learning_rate, frames_stack,completed_level]
-                    #sheet.resize(1)
-                    sheet.append_row(insertRow)
-                else:
-                    insertRow = [training,game,state,eps,experiments,gamma,min_reward,max_reward,timesteps, learning_rate, frames_stack,completed_level]
-                    #sheet.resize(1)
-                    sheet.append_row(insertRow)
+                completed_levelList.append(completed_level)
+    insertToSpreadSheets(training,gameList,stateList,eps,experiments,min_rewardList,maxRewList,total_rewList,timesteps,frames_stack,learning_rate,completed_levelList,mb_size)
+
+
+def insertToSpreadSheets(training,gameList,stateList,eps,experiments,min_rewardList,maxRewList,total_rewList,timesteps,frames_stack,learning_rate,completed_levelList,mb_size):
+    scope = ["https://spreadsheets.google.com/feeds",'https://www.googleapis.com/auth/spreadsheets',"https://www.googleapis.com/auth/drive.file","https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_name("Creds.json", scope)
+    client = gspread.authorize(creds)
+    sheet = client.open("SonicTable").sheet1  # Open the spreadhseet
+
+    for e in experiments:
+        insertRow=[training,gameList[e],stateList[e], eps, experiments,timesteps,min_rewardList[e],maxRewList[e],total_rewList[e],frames_stack,mb_size,learning_rate,completed_levelList[e]]
+        sheet.append_row(insertRow)
+
+    #flag= False
+    #if flag ==False:
+     #   print(sheet.cell(sheet.row_count,1).value)
+      #  print(type(training))
+       # flag ==True
+        #insertRow = [training,game,state, eps,experiments,gamma,min_reward,max_reward,total_raw_reward,timesteps,learning_rate, frames_stack,completed_level]
+        #sheet.resize(1)
+        #sheet.append_row(insertRow)
+    #else:
+     #   insertRow = [training,game,state,eps,experiments,gamma,min_reward,max_reward,timesteps, learning_rate, frames_stack,completed_level]
+        #sheet.resize(1)
+      #  sheet.append_row(insertRow)
 
 
 def convertBK2toMovie():
