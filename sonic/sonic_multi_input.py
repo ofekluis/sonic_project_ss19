@@ -69,7 +69,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
     # Parameters
     #global timesteps
     #timesteps = 1000#4500
-    memory = deque(maxlen=10000)
+    memory = deque(maxlen=20000)
     #global epsilon
     eps = epsilon
     global epsilon_decay                               #probability of doing a random move
@@ -147,7 +147,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
             done = False
             total_raw_reward = 0.0
             Q= np.empty([])
-            last_info=dict([])
+            next_info=dict([])
             experiementRewardList=[]
             gameList=[]
             stateList=[]
@@ -155,6 +155,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
             maxRewList=[]
             total_rewList=[]
             completed_levelList=[]
+            current_max_x=0.0
             #Observation
             #in this loop sonic only plays according to epsilon greedy and saves its experience
             for t in range(timesteps):
@@ -165,26 +166,28 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                 else:
                     #pick a random action
                     action = env.action_space.sample()
-                next_obs, reward, done, info = env.step(action)     # result of action
-                info_dic=info
-                info = np.array(list(info_dic.values()))
-                reward_ = min(reward,reward_clip)
+                next_obs, reward, done, next_info = env.step(action)     # result of action
+
+                next_info_dic=next_info
+                next_info = np.array(list(next_info_dic.values()))
 
                 total_raw_reward += reward
                 max_reward = max(reward, max_reward)
                 min_reward = min(reward, min_reward)
-                lvl= (info_dic["zone"],info_dic["act"])
+                lvl= (next_info_dic["zone"],next_info_dic["act"])
                 if env.max_x > max_x[lvl]:
                     # if this is the farthest we've ever reached in this level
                     max_x[lvl] = env.max_x
-                    reward+=20
-                if (np.random.rand()<0.33) or reward > 900:
+                if (np.random.rand()<0.7 or reward > 900) and t>0:
                     #don't save all states since memory is limited and went experience from different levels in training
-                    memory.append((obs, next_obs ,action, reward, done, info))
+                    memory.append((obs, next_obs ,action, reward, done, info, next_info))
                 obs = next_obs
+                info= next_info
+                info_dic= next_info_dic
                 if done:
                     obs = env.reset()           #restart game if done
-                last_info=info_dic
+                current_max_x = max(current_max_x, env.max_x)
+
                 #todo initalize vars
                 #total_total_rew+=total_total_rew
                 #total_steps=(e+1)*timesteps
@@ -202,9 +205,9 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
             rewardList.append(experiementRewardList)
             print("Total reward: {}".format(total_raw_reward))
             print("Avg. step reward: {}".format(total_raw_reward/timesteps))
-            print("Max distance on x axis: ", max_x[(info_dic["zone"],info_dic["act"])])
-            print("Current max distance on x axis: ", env.max_x)
-            print("Observation of experiment ",e,"with ", timesteps," steps is finished")
+            print("Max distance on x axis: ", max_x[lvl])
+            print("Current max distance on x axis: ", current_max_x)
+            print("Observation of experiment",e,"out of",experiments,"with",timesteps,"steps is finished")
 
             # Learning
             if len(memory) >= mb_size:
@@ -232,20 +235,20 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                 diff=0
                 #preparing batch to send into the NN for learning, using bellman's double Q
                 #for the Q estimation
-                for i,(obs,next_obs,action,reward,done,info) in enumerate(minibatch):
-                    reward = min(reward,reward_clip)
+                for i,(obs,next_obs,action,reward,done,info,next_info) in enumerate(minibatch):
+                    #reward = min(reward,reward_clip)
                     obs=np.array(obs)
                     next_obs=np.array(next_obs)
                     inputs[i] = obs
                     info_inputs[i] = info
                     # double Q
                     Q = model.predict([obs[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
-                    Q_next = model.predict([next_obs[np.newaxis,:],info[np.newaxis,:]])[0]
-                    Q_target = target_model.predict([next_obs[np.newaxis,:],info[np.newaxis,:]])[0]
+                    Q_next = model.predict([next_obs[np.newaxis,:],next_info[np.newaxis,:]])[0]
+                    Q_target = target_model.predict([next_obs[np.newaxis,:],next_info[np.newaxis,:]])[0]
                     targets[i] = copy.copy(Q)
-                    diff+=sum(Q-Q_target)
+                    diff+=sum(Q_next-Q_target)
                     if done:
-                        targets[i, action] = reward - reward_clip
+                        targets[i, action] = reward
                     else:
                         targets[i, action] = reward + gamma * Q_target[np.argmax(Q_next)]
                 #train network on constructed inputs,targets
@@ -256,10 +259,10 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
 
                 print("Model minibatch training lasted:",
                         str(timedelta(seconds=time.time()-minibatch_train_start_time)),"dd:hh:mm:ss")
-                print("Learning of experiment: ",e,"with ", timesteps," steps is finished")
+                print("Learning of experiment",e,"out of",experiments,"with",timesteps,"steps is finished")
                 print("Total steps so far: ", (e+1)*timesteps)
 
-                if diff/mb_size < 0.000000000000001 and e > 40:
+                if diff/mb_size < 0.000000000000001 and e > 2000:
                     # if there is not much difference in a batch after some
                     # training assume convergance
                     converged = True

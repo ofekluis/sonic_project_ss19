@@ -52,22 +52,26 @@ class RewardWrapper(gym.Wrapper):
                 # happens only if level is won
                 rew+=5000
             if info["x"] > self.last_info["x"]:
-                rew+=10
+                rew+=2
+            if info["x"] < self.last_info["x"]:
+                rew-=0.5
             if info["x"] == self.last_info["x"] and info["y"] == self.last_info["y"]:
                 #motivate movement
                 rew-=1
             if info["lives"] < self.last_info["lives"]:
-                rew-=50
+                rew-=30
                 self.last_life_lost=self.steps
-            if info["rings"] > self.last_info["rings"] or \
-                    info["score"] > self.last_info["score"]:
+            d_score = info["score"]-self.last_info["score"]
+            if d_score > 0:
+                rew+=d_score*0.05
+            if info["rings"] > self.last_info["rings"]:
                 rew+=10
             if self.last_info["rings"] > 0 and info["rings"] == 0:
                 # if we were attacked and lost all rings
                 rew-=30
             if info["x"] > self.max_x:
                 #if this point was the farthest we've reached in this level (in these t timesteps)
-                rew+=2
+                rew+=10
                 self.max_x = info["x"]
         self.steps+=1
         self.last_info = info
