@@ -6,7 +6,7 @@ def main():
 	epsilonList=[0.1, 0.3, 0.5, 0.7]
 	experimentList=[2000]
 	timeStepsList=[5000,10000,15000]
-	mb_sizeList=[250,500,1000]
+	mb_sizeList=[32,64,128]
 	frameStacksList=[4,6]
 
 	for e in epsilonList:

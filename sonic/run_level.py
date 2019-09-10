@@ -37,11 +37,10 @@ obs = env.reset() #game start
 obs = np.array(obs) #converts from Lazy format to normal numpy array see wrappers_atari.py
 timesteps=10000
 for t in range(timesteps):
-    if t%50:
-        action = 1#env.action_space.sample()
+    if t<1 or t%100==0:
+        action = env.action_space.sample()
     else:
         Q = target_model.predict([obs[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
-
         action = np.argmax(Q)
     next_obs, reward, done, info = env.step(action)     # result of action
     info = np.array(list(info.values()))

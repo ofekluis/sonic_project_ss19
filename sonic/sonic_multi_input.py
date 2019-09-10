@@ -64,19 +64,21 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
     os.chdir(retval+"/logs")
     if not os.path.isdir(training_folder):
         os.mkdir(training_folder)
+    os.chdir(retval+"/logs/"+training_folder)
+    if not os.path.isdir("model_checkpoints"):
+        os.mkdir("model_checkpoints")
+
+
     os.chdir("..")
 
     # Parameters
     #global timesteps
     #timesteps = 1000#4500
-    memory = deque(maxlen=20000)
+    memory = deque(maxlen=40000)
     #global epsilon
     eps = epsilon
     global epsilon_decay                               #probability of doing a random move
     epsilon_decay = 0.999  #will be multiplied with epsilon for decaying it
-    max_random = 1
-    min_random = 0.1                           #minimun randomness #r12
-    rand_decay = 1e-3                                #reduce the randomness by decay/loops
     gamma = 0.99                               #discount for future reward
     #mb_size = 256
     #global experiments                             #learning minibatch size
@@ -84,61 +86,50 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
     learning_rate = 5e-5
     max_reward = 0
     min_reward = 10000
+    check_point_interval=100000
     #frames_stack=4 # how many frames to be stacked together
     #action_threshold = 1
-    target_step_interval = 10
+    target_step_interval = 8192
     reward_clip = 1000 #maximum reward allowed for step
     image_size = (128,128,frames_stack)
-    save_factor= 500000 # when to save the model according in game steps
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True # pylint: disable=E1101
     converged=False # flag to check convergence (diff between Q and Q_target is small enough)
     with tf.Session(config=config) as sess:
         model=m.ddqn_model(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
+        target_model=m.ddqn_model(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
         if os.path.isfile("sonic_model.h5"):
             model.load_weights("sonic_model.h5")
+        target_model.set_weights(model.get_weights())
         model.compile(loss="mse", optimizer=optimizers.Adam(lr=learning_rate), metrics=["accuracy"])
-        tensorboard = TensorBoard(log_dir="logs/"+training_folder+"/sonic_modmemdecayrdq18_reshape_64x512mb256_resc_target_interval_{}_memory_30000_lr_{}_decay_{}.{}".format(target_step_interval,learning_rate, rand_decay, time.time()))
+        target_model.compile(loss="mse", optimizer=optimizers.Adam(lr=learning_rate), metrics=["accuracy"])
+        target_model.trainable = False
+        tensorboard = TensorBoard(log_dir="logs/"+training_folder+"/sonic_target_interval_{}_memory_40000_lr_{}_epsilon_{}.{}".format(target_step_interval,learning_rate, epsilon, time.time()))
         tensorboard.set_model(model)
         train_names = ["Loss", "Accuracy"]
 
-        # serialize model to JSON
-        model_json = model.to_json()
-        with open("sonic_model.json", "w") as json_file:
-            json_file.write(model_json)
-        # serialize weights to HDF5
-        model.save_weights("sonic_model.h5")
-        model.save_weights("sonic_target_model.h5")
-
-        #env.close()
-    game = "SonicTheHedgehog-Genesis"#np.random.choice(games,1)[0]
-    #train on all but the first level, which is reserved for testing
-    #states = retro.data.list_states(game)[1:]
-    states = retro.data.list_states(game)
-    max_x = defaultdict(lambda: 0.0)
-    avg_reward_List=[]
-    total_total_rew=0
-    global rewardList
-    rewardList=[]
-    for e in range(experiments):
-        with tf.Session(config=config) as sess:
+        game = "SonicTheHedgehog-Genesis"#np.random.choice(games,1)[0]
+        #train on all but the first level, which is reserved for testing
+        states = retro.data.list_states(game)[1:]
+        max_x = defaultdict(lambda: 0.0)
+        avg_reward_List=[]
+        total_total_rew=0
+        global rewardList
+        rewardList=[]
+        steps=0
+        for e in range(experiments):
+            """
             if converged:
                 # model converged
                 model.save_weights("sonic_target_model.h5")
                 print("Model converged, stopping training")
                 break
-            model = model_from_json(model_json)
-            model.load_weights("sonic_model.h5")
-            model.compile(loss="mse", optimizer=optimizers.Adam(lr=learning_rate), metrics=["accuracy"])
-            target_model = model_from_json(model_json)
-            target_model.load_weights("sonic_target_model.h5")
-            target_model.trainable = False
-            target_model.compile(loss="mse", optimizer=optimizers.Adam(lr=learning_rate), metrics=["accuracy"])
+            """
             loop_start_time = time.time()
             #pick a level to train on randomly
             state = np.random.choice(states,1)[0]
             print("Playing",game,"-",state)
-            env = retro.make(game, state,scenario="scenario.json", record="logs/"+training_folder)
+            env = retro.make(game, state, record="logs/"+training_folder)
             env = wrappers.WarpFrame(env, 128, 128, grayscale=True)
             env = wrappers.FrameStack(env,frames_stack)
             env = wrappers.SonicDiscretizer(env) # Discretize the environment for q learning
@@ -149,6 +140,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
             Q= np.empty([])
             next_info=dict([])
             experiementRewardList=[]
+            train_interval=100
             gameList=[]
             stateList=[]
             minRewList=[]
@@ -156,9 +148,12 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
             total_rewList=[]
             completed_levelList=[]
             current_max_x=0.0
+            done = False
+            lvl=None
             #Observation
             #in this loop sonic only plays according to epsilon greedy and saves its experience
-            for t in range(timesteps):
+            #it also trains on random batch every train_interval steps
+            while not done and (steps+1)%timesteps!=0:
                 #env.render() #display training
                 if np.random.rand() > epsilon and e>0:
                     Q = model.predict([np.array(obs)[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
@@ -170,7 +165,6 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
 
                 next_info_dic=next_info
                 next_info = np.array(list(next_info_dic.values()))
-
                 total_raw_reward += reward
                 max_reward = max(reward, max_reward)
                 min_reward = min(reward, min_reward)
@@ -178,14 +172,11 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                 if env.max_x > max_x[lvl]:
                     # if this is the farthest we've ever reached in this level
                     max_x[lvl] = env.max_x
-                if (np.random.rand()<0.7 or reward > 900) and t>0:
-                    #don't save all states since memory is limited and went experience from different levels in training
+                if steps>0:
                     memory.append((obs, next_obs ,action, reward, done, info, next_info))
                 obs = next_obs
                 info= next_info
                 info_dic= next_info_dic
-                if done:
-                    obs = env.reset()           #restart game if done
                 current_max_x = max(current_max_x, env.max_x)
 
                 #todo initalize vars
@@ -193,13 +184,45 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                 #total_steps=(e+1)*timesteps
                 #total_avg_reward= total_total_rew/total_steps
                 #avg_reward_List.append(total_avg_reward)
-
                 experiementRewardList.append(reward)
                 #to calculate coinfidence interval
                 #liste rewards von experiment
                 #liste von allen experiementen (liste von zeile drüber(Listen))
-
-                #decay epsilon
+                if steps>=mb_size:
+                    if steps%train_interval==0:
+                        #train on a random sample from memory of size mb_size
+                        minibatch=random.sample(memory,mb_size)
+                        info_inputs = np.zeros((mb_size,11))
+                        inputs_shape = (mb_size,) + image_size
+                        inputs = np.zeros(inputs_shape)
+                        targets = np.zeros((mb_size, ACTION_SIZE))
+                        for i,(obs,next_obs,action,reward,done,info,next_info) in enumerate(minibatch):
+                            #reward = min(reward,reward_clip)
+                            obs=np.array(obs)
+                            next_obs=np.array(next_obs)
+                            inputs[i] = obs
+                            info_inputs[i] = info
+                            # double Q
+                            Q = model.predict([obs[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
+                            Q_next = model.predict([next_obs[np.newaxis,:],next_info[np.newaxis,:]])[0]
+                            Q_target_next = target_model.predict([next_obs[np.newaxis,:]
+                                ,next_info[np.newaxis,:]])[0]
+                            targets[i] = copy.copy(Q)
+                            #diff+=sum(Q_next-Q_target_next)
+                            if done:
+                                targets[i, action] = reward
+                            else:
+                                targets[i, action] = reward + gamma * Q_target_next[np.argmax(Q_next)]
+                        #train network on constructed inputs,targets
+                        logs = model.train_on_batch([inputs, info_inputs], targets)
+                        write_log(tensorboard, train_names, logs, steps)
+                    if steps%target_step_interval==0:
+                        target_model.set_weights(model.get_weights())
+                    if steps%check_point_interval==0:
+                        model.save_weights(retval+"/logs/"+training_folder+"/model_checkpoints/\
+                                           sonic_model_"+str(steps)+".h5")
+                steps+=1
+            #decay epsilon
             if epsilon > 0.005:
                 epsilon*=epsilon_decay
             rewardList.append(experiementRewardList)
@@ -207,81 +230,20 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
             print("Avg. step reward: {}".format(total_raw_reward/timesteps))
             print("Max distance on x axis: ", max_x[lvl])
             print("Current max distance on x axis: ", current_max_x)
-            print("Observation of experiment",e,"out of",experiments,"with",timesteps,"steps is finished")
-
-            # Learning
-            if len(memory) >= mb_size:
-                minibatch_train_start_time = time.time()
-
-                #sample memory
-                minibatch = random.sample(memory, mb_size)
-
-                info_inputs = np.zeros((mb_size,11))
-                inputs_shape = (mb_size,) + image_size
-                inputs = np.zeros(inputs_shape)
-                targets = np.zeros((mb_size, env.action_space.n))
-
-                # load a new target model every target_step_interval
-                # training loops and leave it unchanged 'till the lext
-                # interval
-                if (e+1)%target_step_interval == 0:# and training_loop*sub_loops + sub_training_loop+1 >= 100: #r12 chase score first
-                    model.save_weights("sonic_target_model.h5")
-                    if (e+1)*timesteps % save_factor == 0:
-                        model.save_weights("sonic_model_"+ str(e*timesteps+1)+".h5")
-                    target_model = model_from_json(model_json)
-                    target_model.load_weights("sonic_target_model.h5")
-                    target_model.trainable = False
-                    target_model.compile(loss="mse", optimizer=optimizers.Adam(lr=learning_rate), metrics=["accuracy"])
-                diff=0
-                #preparing batch to send into the NN for learning, using bellman's double Q
-                #for the Q estimation
-                for i,(obs,next_obs,action,reward,done,info,next_info) in enumerate(minibatch):
-                    #reward = min(reward,reward_clip)
-                    obs=np.array(obs)
-                    next_obs=np.array(next_obs)
-                    inputs[i] = obs
-                    info_inputs[i] = info
-                    # double Q
-                    Q = model.predict([obs[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
-                    Q_next = model.predict([next_obs[np.newaxis,:],next_info[np.newaxis,:]])[0]
-                    Q_target = target_model.predict([next_obs[np.newaxis,:],next_info[np.newaxis,:]])[0]
-                    targets[i] = copy.copy(Q)
-                    diff+=sum(Q_next-Q_target)
-                    if done:
-                        targets[i, action] = reward
-                    else:
-                        targets[i, action] = reward + gamma * Q_target[np.argmax(Q_next)]
-                #train network on constructed inputs,targets
-                logs = model.train_on_batch([inputs, info_inputs], targets)
-                write_log(tensorboard, train_names, logs, e*timesteps)
-
-                model.save_weights("sonic_model.h5")
-
-                print("Model minibatch training lasted:",
-                        str(timedelta(seconds=time.time()-minibatch_train_start_time)),"dd:hh:mm:ss")
-                print("Learning of experiment",e,"out of",experiments,"with",timesteps,"steps is finished")
-                print("Total steps so far: ", (e+1)*timesteps)
-
-                if diff/mb_size < 0.000000000000001 and e > 2000:
-                    # if there is not much difference in a batch after some
-                    # training assume convergance
-                    converged = True
-
-                env.close()
-
-                print("Observation lasted:",str(timedelta(seconds=time.time()-loop_start_time)),"dd:hh:mm:ss")
-                print("Training lasted:",str(timedelta(seconds=time.time()-start_time)),"dd:hh:mm:ss")
-                print("Rewards between",min_reward,"and",max_reward)
-                gameList.append(game)
-                stateList.append(state)
-                minRewList.append(min_reward)
-                maxRewList.append(max_reward)
-                total_rewList.append(total_raw_reward)
-                completed_level=False
-                if info_dic["level_end_bonus"] > 0:
-                    completed_level=True
-                completed_levelList.append(completed_level)
+            print("Experiment",e,"out of",experiments,"with",timesteps,"steps is finished")
+            steps+=1
+            gameList.append(game)
+            stateList.append(state)
+            minRewList.append(min_reward)
+            maxRewList.append(max_reward)
+            total_rewList.append(total_raw_reward)
+            completed_level=False
+            if info_dic["level_end_bonus"] > 0:
+                completed_level=True
+            completed_levelList.append(completed_level)
+            env.close()
     insertToSpreadSheets(training,gameList,stateList,eps,experiments,min_rewardList,maxRewList,total_rewList,timesteps,frames_stack,learning_rate,completed_levelList,mb_size)
+
 
 
 def insertToSpreadSheets(training,gameList,stateList,eps,experiments,min_rewardList,maxRewList,total_rewList,timesteps,frames_stack,learning_rate,completed_levelList,mb_size):
