@@ -1,4 +1,6 @@
 from keras import optimizers
+import matplotlib.pyplot as plt
+import scipy.stats as st
 from keras.models import load_model
 from keras.models import model_from_json
 from collections import deque,defaultdict
@@ -67,6 +69,8 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
     os.chdir(retval+"/logs/"+training_folder)
     if not os.path.isdir("model_checkpoints"):
         os.mkdir("model_checkpoints")
+    if not os.path.isdir("graphs"):
+        os.mkdir("graphs")
 
 
     os.chdir("..")
@@ -95,6 +99,12 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True # pylint: disable=E1101
     converged=False # flag to check convergence (diff between Q and Q_target is small enough)
+    total_mean=0
+    total_var=0
+    means=[]
+    stds=[]
+    rewards=[]
+    plot_interval=20 # how often (in experiments) to plot graphs
     with tf.Session(config=config) as sess:
         model=m.ddqn_model(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
         target_model=m.ddqn_model(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
@@ -117,6 +127,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
         global rewardList
         rewardList=[]
         steps=0
+        plot_interval=1 # how often to plot the avg. reward
         for e in range(experiments):
             """
             if converged:
@@ -139,7 +150,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
             total_raw_reward = 0.0
             Q= np.empty([])
             next_info=dict([])
-            experiementRewardList=[]
+            experimentRewardList=np.zeros(timesteps)
             train_interval=100
             gameList=[]
             stateList=[]
@@ -153,7 +164,8 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
             #Observation
             #in this loop sonic only plays according to epsilon greedy and saves its experience
             #it also trains on random batch every train_interval steps
-            while not done and (steps+1)%timesteps!=0:
+            for i in range(timesteps):
+                steps=e*timesteps+i
                 #env.render() #display training
                 if np.random.rand() > epsilon and e>0:
                     Q = model.predict([np.array(obs)[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
@@ -184,7 +196,8 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                 #total_steps=(e+1)*timesteps
                 #total_avg_reward= total_total_rew/total_steps
                 #avg_reward_List.append(total_avg_reward)
-                experiementRewardList.append(reward)
+                experimentRewardList[i]=reward
+                rewards.append(reward)
                 #to calculate coinfidence interval
                 #liste rewards von experiment
                 #liste von allen experiementen (liste von zeile drüber(Listen))
@@ -221,17 +234,26 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                     if steps%check_point_interval==0:
                         model.save_weights(retval+"/logs/"+training_folder+"/model_checkpoints/\
                                            sonic_model_"+str(steps)+".h5")
-                steps+=1
             #decay epsilon
             if epsilon > 0.005:
                 epsilon*=epsilon_decay
-            rewardList.append(experiementRewardList)
+            mean_e=np.mean(experimentRewardList)
+            weight=1/(e+1)
+            old_mean=total_mean
+            total_mean=mean_e*weight+total_mean*(1-weight)
+            var_e=np.var(experimentRewardList)
+            total_var= var_e*weight+total_var*(1-weight)+weight*(1-weight)*(total_mean-old_mean)**2
+
+            means.append(total_mean)
+            stds.append(np.sqrt(total_var))
+            if e>0 and e%plot_interval==0:
+                #plot avg reward graph
+                plot_avg_reward(means,stds,e,epsilon,timesteps,retval)
             print("Total reward: {}".format(total_raw_reward))
-            print("Avg. step reward: {}".format(total_raw_reward/timesteps))
+            print("Avg. step reward: {}".format(total_raw_reward/steps))
             print("Max distance on x axis: ", max_x[lvl])
             print("Current max distance on x axis: ", current_max_x)
             print("Experiment",e,"out of",experiments,"with",timesteps,"steps is finished")
-            steps+=1
             gameList.append(game)
             stateList.append(state)
             minRewList.append(min_reward)
@@ -244,7 +266,36 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
             env.close()
     insertToSpreadSheets(training,gameList,stateList,eps,experiments,min_rewardList,maxRewList,total_rewList,timesteps,frames_stack,learning_rate,completed_levelList,mb_size)
 
+def plot_avg_reward(means,stds, e,epsilon,timesteps,retval):
+    ci = 0.95 # 95% confidence interval
+    means=np.array(means)
+    stds=np.array(stds)
+    n = means.size
 
+    # compute upper/lower confidence bounds
+    test_stat = st.t.ppf((ci + 1) / 2, e)
+    lb,ub=st.t.interval(ci, e, loc=means, scale=stds)
+    #lower_bound = means - test_stat * stds / np.sqrt(e)
+    #upper_bound = means + test_stat * stds / np.sqrt(e)
+    avg_reward=means[-1]
+    print ('Avg. Reward per step after %d experiments: %.4f' % (e, avg_reward))
+
+    # clear plot frame
+    plt.clf()
+
+
+    # plot average reward
+    x = np.arange(0, (e+1)*timesteps, timesteps)
+    plt.plot(x, means, color='blue', label="epsilon=%.2f" % epsilon)
+    # plot upper/lower confidence bound
+    plt.fill_between(x=x, y1=lb, y2=ub, color='blue', alpha=0.2, label="CI %.2f" % ci)
+
+    plt.grid()
+    plt.ylim(-2, 5) # limit y axis
+    plt.title('Avg. Reward per step after %d experiments: %.4f' % (e, avg_reward))
+    plt.ylabel("Reward per step")
+    plt.xlabel("Steps")
+    plt.savefig(retval+"/logs/"+training_folder+"/graphs/avg_reward_"+str(e)+".png",bbox_inches='tight')
 
 def insertToSpreadSheets(training,gameList,stateList,eps,experiments,min_rewardList,maxRewList,total_rewList,timesteps,frames_stack,learning_rate,completed_levelList,mb_size):
     scope = ["https://spreadsheets.google.com/feeds",'https://www.googleapis.com/auth/spreadsheets',"https://www.googleapis.com/auth/drive.file","https://www.googleapis.com/auth/drive"]
