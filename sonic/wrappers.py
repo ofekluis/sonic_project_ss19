@@ -1,10 +1,12 @@
 import gym
+from math import inf
 import numpy as np
 from collections import deque,defaultdict
 from gym import spaces
 import cv2
 cv2.ocl.setUseOpenCL(False)
-
+# other than the rewardwrapper which is customly made, most wrappers here were copied from gym.retro's own wrappers
+# with slight adjustments and improvments
 class TimeLimit(gym.Wrapper):
     def __init__(self, env, max_episode_steps=None):
         super(TimeLimit, self).__init__(env)
@@ -36,23 +38,74 @@ class RewardWrapper(gym.Wrapper):
         super().__init__(env)
         self.steps=0
         self.last_info=dict([])
+        self.last_scaled_prog=0
+        self.before_last_info=dict([])
         #stores the max x coordinates reached for each level
         self.max_x=0
+        # end of level coordinates for sonic, used in the rewards wrapper
+        self.level_max_x = {
+            (0,0) : 0x2560,
+            (0,1) : 0x1F60,
+            (0,2) : 0x292A,
+
+            (2,0) : 0x1860,
+            (2,1) : 0x1860,
+            (2,2) : 0x1720,
+
+            (4,0) : 0x2360,
+            (4,1) : 0x2960,
+            (4,2) : 0x2B83,
+
+            (1,0) : 0x1A50,
+            (1,1) : 0x1150,
+            (1,2) : 0x1CC4,
+
+            (3,0) : 0x2060,
+            (3,1) : 0x2060,
+            (3,2) : 0x1F48,
+
+            (5,0) : 0x2260,
+            (5,1) : 0x1EE0,
+            (5,2) : inf
+        }
     def reset(self, **kwargs):
         self.last_info = dict([])
+        self.last_scale_prog=0
+        self.before_last_info=dict([])
         self.max_x=0
         self.steps=0
-        return self.env.reset(**kwargs)
+        return self.envereset(**kwargs)
     def step(self, action):
         obs, rew, done, info = self.env.step(action)
         rew=0 # ignore default rew and calculate one based on info and last_info
+        won=False
         if len(self.last_info) > 0 and info["screen_x_end"]!=0:
             # no reward estimation for first step
-            if info["level_end_bonus"] > 0:
-                # happens only if level is won
-                rew+=5000
+            lvl = (info["zone"],info["act"])
+            level_max_x=self.level_max_x[lvl] # maximum possible coordinates for this level
+            scaled_prog = info["x"]/level_max_x # scaled prog
+            d_max_x= level_max_x-info["x"]
+            if scaled_prog>0.95 or info["x"]>=30000:
+                # close enough to the end to be considered a win
+                won = True
+                done = True
+                #calculate some bonus for winning according to how fast it was done
+                bonus= 5000-steps
+                if bonus < 100:
+                    bonus=100
+                rew+=bonus
             if info["x"] > self.last_info["x"]:
-                rew+=2
+                #add reward for positive changes in x scaled by level's length
+                if lvl != (5,2):
+                    rew+=(scaled_prog-self.last_scaled_prog)*20000
+                else:
+                    rew+=2
+
+            if self.before_last_info:
+                d_x=info["x"]-self.before_last_info["x"]
+                #motivate running
+                if d_x>2:
+                    rew+=0.5
             if info["x"] < self.last_info["x"]:
                 pass
                 #rew-=1
@@ -63,22 +116,24 @@ class RewardWrapper(gym.Wrapper):
             if info["lives"] < self.last_info["lives"]:
                 #rew-=2
                 self.last_life_lost=self.steps
-            #d_score = info["score"]-self.last_info["score"]
-            #if d_score > 0:
-            #    rew+=d_score*0.05
+            d_score = info["score"]-self.last_info["score"]
+            if d_score > 0:
+                rew+=d_score*0.005
             if info["rings"] > self.last_info["rings"]:
-                rew+=0.1
+                rew+=0.5
             if self.last_info["rings"] > 0 and info["rings"] == 0:
                 # if we were attacked and lost all rings
                 pass
                 #rew-=1
             if info["x"]>self.max_x:
                 #if this point was the farthest we've reached in this level (in these t timesteps)
-                rew+=10
+                rew+=2
                 self.max_x = info["x"]
+            self.last_scaled_prog=scaled_prog
         self.steps+=1
         self.last_info = info
-        return obs, rew, done, info
+        self.before_last_info = self.last_info
+        return won, obs, rew, done, info
 
 class WarpFrame(gym.ObservationWrapper):
     def __init__(self, env, width=84, height=84, grayscale=True, dict_space_key=None):

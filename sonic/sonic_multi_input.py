@@ -78,6 +78,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
     #timesteps = 1000#4500
     memory = deque(maxlen=40000) # memory for saving observations, as a queue, maxlen kept low for ram reasons
     #global epsilon
+    action_persist=4 # how many environments steps to persist for an action
     eps = epsilon
     global epsilon_decay                               #probability of doing a random move
     epsilon_decay = 0.999  #will be multiplied with epsilon for decaying it
@@ -167,8 +168,12 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                 else:
                     #pick a random action
                     action = env.action_space.sample()
-                next_obs, reward, done, next_info = env.step(action)     # result of action
-
+                rewards=np.zeros(action_persist)
+                for j in range(action_persist):
+                    won, next_obs, rewards[j], done, next_info = env.step(action)     # result of action
+                    if done: break
+                reward=sum(rewards) # sum the rewards of doing action, action_persist times
+                if j>0: reward=reward/j #scale reward
                 next_info_dic=next_info
                 next_info = np.array(list(next_info_dic.values())) # make array out of lazy represenation see wrappers.py
                 total_raw_reward += reward
@@ -312,8 +317,9 @@ def insertToSpreadSheets(training,gameList,stateList,eps,experiments,min_rewardL
     client = gspread.authorize(creds)
     sheet = client.open("SonicTable").sheet1  # Open the spreadhseet
 
+    training2=int(sheet.cell(sheet.row_count,1).value)+1
     for e in experiments:
-        insertRow=[training,gameList[e],stateList[e], eps, experiments,timesteps,min_rewardList[e],maxRewList[e],total_rewList[e],frames_stack,mb_size,learning_rate,completed_levelList[e]]
+        insertRow=[training2,gameList[e],stateList[e], eps, experiments,timesteps,min_rewardList[e],maxRewList[e],total_rewList[e],frames_stack,mb_size,learning_rate,completed_levelList[e]]
         sheet.append_row(insertRow)
 
     #flag= False
