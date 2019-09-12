@@ -73,7 +73,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
         os.mkdir("graphs")
 
 
-    os.chdir("..")
+    os.chdir("../..")
 
     # Parameters
     #global timesteps
@@ -127,7 +127,6 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
         global rewardList
         rewardList=[]
         steps=0
-        plot_interval=1 # how often to plot the avg. reward
         for e in range(experiments):
             """
             if converged:
@@ -230,10 +229,13 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                         logs = model.train_on_batch([inputs, info_inputs], targets)
                         write_log(tensorboard, train_names, logs, steps)
                     if steps%target_step_interval==0:
+                        #copy model weights to target model weights
                         target_model.set_weights(model.get_weights())
                     if steps%check_point_interval==0:
                         model.save_weights(retval+"/logs/"+training_folder+"/model_checkpoints/\
                                            sonic_model_"+str(steps)+".h5")
+                if done:
+                    obs=env.reset()
             #decay epsilon
             if epsilon > 0.005:
                 epsilon*=epsilon_decay
@@ -273,10 +275,9 @@ def plot_avg_reward(means,stds, e,epsilon,timesteps,retval):
     n = means.size
 
     # compute upper/lower confidence bounds
-    test_stat = st.t.ppf((ci + 1) / 2, e)
-    lb,ub=st.t.interval(ci, e, loc=means, scale=stds)
-    #lower_bound = means - test_stat * stds / np.sqrt(e)
-    #upper_bound = means + test_stat * stds / np.sqrt(e)
+    crit_val = st.t.ppf((ci + 1) / 2, n)
+    lb = means - crit_val * stds / np.sqrt(n)
+    ub = means + crit_val * stds / np.sqrt(n)
     avg_reward=means[-1]
     print ('Avg. Reward per step after %d experiments: %.4f' % (e, avg_reward))
 
