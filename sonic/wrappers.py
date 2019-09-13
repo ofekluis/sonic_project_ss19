@@ -74,7 +74,7 @@ class RewardWrapper(gym.Wrapper):
         self.before_last_info=dict([])
         self.max_x=0
         self.steps=0
-        return self.envereset(**kwargs)
+        return self.env.reset(**kwargs)
     def step(self, action):
         obs, rew, done, info = self.env.step(action)
         rew=0 # ignore default rew and calculate one based on info and last_info
