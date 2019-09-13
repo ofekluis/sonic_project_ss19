@@ -14,6 +14,7 @@ import numpy as np
 import wrappers
 import gym
 import retro
+import time
 import copy
 import model as m
 import time
@@ -57,6 +58,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
     row = sheet.row_values(2)
     sheet.resize(numRows)
     training=int(sheet.cell(sheet.row_count,1).value)+1 # get the training number for listing in google sheets
+    insertRow=[training]
     global training_folder
     training_folder='Training_'+str(training)
     retval = os.getcwd()
@@ -269,10 +271,20 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
             maxRewList.append(max_reward)
             total_rewList.append(total_raw_reward)
             completed_level=False
-            if info_dic["level_end_bonus"] > 0:
-                completed_level=True
-            completed_levelList.append(completed_level)
+            #if info_dic["level_end_bonus"] > 0:
+             #   completed_level=True
+            completed_levelList.append(won)
             env.close()
+    retval = os.getcwd()
+    os.chdir(retval+"/logs/"+training_folder)
+    if won:
+        retval=os.getcwd()
+        files = os.listdir(retval)
+        paths = [os.path.join(retval, basename) for basename in files if basename.endswith('.bk2')]
+        latest_file=max(paths, key=os.path.getctime)
+        timestr = time.strftime("%Y%m%d-%H%M%S")
+        os.rename(os.path.basename(latest_file), os.path.basename(latest_file)+"_LEVEL_COMPLETED_"+timestr)
+    os.chdir("../..")    
     insertToSpreadSheets(training,gameList,stateList,eps,experiments,minRewList,maxRewList,total_rewList,timesteps,frames_stack,learning_rate,completed_levelList,mb_size)
 
 def plot_avg_reward(means,stds, e,epsilon,timesteps,retval):
@@ -317,9 +329,9 @@ def insertToSpreadSheets(training,gameList,stateList,eps,experiments,min_rewardL
     client = gspread.authorize(creds)
     sheet = client.open("SonicTable").sheet1  # Open the spreadhseet
 
-    training2=int(sheet.cell(sheet.row_count,1).value)+1
+    #training2=int(sheet.cell(sheet.row_count,1).value)+1
     for e in experiments:
-        insertRow=[training2,gameList[e],stateList[e], eps, experiments,timesteps,min_rewardList[e],maxRewList[e],total_rewList[e],frames_stack,mb_size,learning_rate,completed_levelList[e]]
+        insertRow=[training,gameList[e],stateList[e], eps, experiments,timesteps,min_rewardList[e],maxRewList[e],total_rewList[e],frames_stack,mb_size,learning_rate,completed_levelList[e]]
         sheet.append_row(insertRow)
 
     #flag= False
