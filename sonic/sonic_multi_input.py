@@ -335,19 +335,6 @@ def insertToSpreadSheets(training,gameList,stateList,eps,experiments,min_rewardL
         insertRow=[training,gameList[e],stateList[e], eps, experiments,timesteps,min_rewardList[e],maxRewList[e],total_rewList[e],frames_stack,mb_size,learning_rate,completed_levelList[e]]
         sheet.append_row(insertRow)
 
-    #flag= False
-    #if flag ==False:
-     #   print(sheet.cell(sheet.row_count,1).value)
-      #  print(type(training))
-       # flag ==True
-        #insertRow = [training,game,state, eps,experiments,gamma,min_reward,max_reward,total_raw_reward,timesteps,learning_rate, frames_stack,completed_level]
-        #sheet.resize(1)
-        #sheet.append_row(insertRow)
-    #else:
-     #   insertRow = [training,game,state,eps,experiments,gamma,min_reward,max_reward,timesteps, learning_rate, frames_stack,completed_level]
-        #sheet.resize(1)
-      #  sheet.append_row(insertRow)
-
 
 def convertBK2toMovie():
     # converts logs files into sonic videos

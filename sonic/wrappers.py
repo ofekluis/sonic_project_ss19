@@ -90,7 +90,7 @@ class RewardWrapper(gym.Wrapper):
                 won = True
                 done = True
                 #calculate some bonus for winning according to how fast it was done
-                bonus= 5000-steps
+                bonus= 5000-self.steps
                 if bonus < 100:
                     bonus=100
                 rew+=bonus
