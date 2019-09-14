@@ -62,6 +62,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
     global training_folder
     training_folder='Training_'+str(training)
     retval = os.getcwd()
+    sheet.append_row(insertRow)
     #make some dirs for logs
     os.chdir(retval+"/logs")
     if not os.path.isdir(training_folder):
