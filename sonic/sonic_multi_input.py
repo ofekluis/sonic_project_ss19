@@ -359,7 +359,6 @@ def convertBK2toMovie():
 if __name__ == '__main__':
     main()
     #convertBK2toMovie() #not working yet, needs to be done
-
-    evaluationScript.main(rewardList,experiments,timesteps,eps,epsilon_decay)
+    #evaluationScript.main(rewardList,experiments,timesteps,eps,epsilon_decay)
 
 
