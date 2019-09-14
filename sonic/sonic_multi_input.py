@@ -280,7 +280,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
     if won:
         retval=os.getcwd()
         files = os.listdir(retval)
-        paths = [os.path.join(retval, basename) for basename in files if basename.endswith('.bk2')]
+        paths = [os.path.join(retval, basename) for basename in files if basename.endswith('000000.bk2')]
         latest_file=max(paths, key=os.path.getctime)
         timestr = time.strftime("%Y%m%d-%H%M%S")
         os.rename(os.path.basename(latest_file), os.path.basename(latest_file)+"_LEVEL_COMPLETED_"+timestr)
