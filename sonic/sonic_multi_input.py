@@ -235,8 +235,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                         target_model.set_weights(model.get_weights())
                     if steps%check_point_interval==0:
                         #save weights every check_point_interval steps
-                        model.save_weights(retval+"/logs/"+training_folder+"/model_checkpoints/\
-                                           sonic_model_"+str(steps)+".h5")
+                        model.save_weights(retval+"/logs/"+training_folder+"/model_checkpoints/sonic_model_"+str(steps)+".h5")
                 if done:
                     #in case sonic looses/wins start again
                     obs=env.reset()
@@ -285,7 +284,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
         latest_file=max(paths, key=os.path.getctime)
         timestr = time.strftime("%Y%m%d-%H%M%S")
         os.rename(os.path.basename(latest_file), os.path.basename(latest_file)+"_LEVEL_COMPLETED_"+timestr)
-    os.chdir("../..")    
+    os.chdir("../..")
     insertToSpreadSheets(training,gameList,stateList,eps,experiments,minRewList,maxRewList,total_rewList,timesteps,frames_stack,learning_rate,completed_levelList,mb_size)
 
 def plot_avg_reward(means,stds, e,epsilon,timesteps,retval):

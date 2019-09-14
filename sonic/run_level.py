@@ -42,7 +42,7 @@ for t in range(timesteps):
     else:
         Q = target_model.predict([obs[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
         action = np.argmax(Q)
-    next_obs, reward, done, info = env.step(action)     # result of action
+    won,next_obs, reward, done, info = env.step(action)     # result of action
     info = np.array(list(info.values()))
     next_obs = np.array(next_obs) #converts from Lazy format to normal numpy array see wrappers_atari.py
     obs=next_obs
