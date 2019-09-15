@@ -109,7 +109,6 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
     max_x = defaultdict(lambda: 0.0) #keep track of maxium x distance covered in a level
     total_total_rew=0
     steps=0 # how many steps did sonic do in total over all experiments
-    save_best_x_bool=False #should the log be saved with a special name
     with tf.Session(config=config) as sess:
         model=m.ddqn_model(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
         target_model=m.ddqn_model(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
@@ -198,7 +197,6 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                 if current_max_x > max_x[lvl]:
                     # if this is the farthest we've ever reached in this level
                     # save log under a different name
-                    save_best_x_bool=True
                     max_x[lvl] = current_max_x
                 if done or won or i == timesteps-1:
                     #handle end of episode, generate logs
@@ -206,12 +204,10 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                     obs=env.reset()
                     if i==timesteps-1:
                         env.close()
-                    if save_best_x:
+                    if current_max_x >= max_x[lvl]:
                         # if this is the farthest we've ever reached in this level
                         # save log under a different name
-                        max_x[lvl] = current_max_x
                         save_best_x(current_max_x,won,state)
-                        save_best_x_bool = False
                 if steps>=mb_size:
                     # first make sure we have enough experience for a minibatch
                     # training
