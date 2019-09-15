@@ -84,7 +84,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
     action_persist=4 # how many environments steps to persist for an action
     eps = epsilon
     global epsilon_decay                               #probability of doing a random move
-    epsilon_decay = 0.999  #will be multiplied with epsilon for decaying it
+    epsilon_decay = choose_epsilon_decay(epsilon,experiments)  #will be multiplied with epsilon for decaying it
     gamma = 0.99                               #discount for future reward
     #mb_size = 256
     #global experiments                             #learning minibatch size
@@ -338,6 +338,13 @@ def plot_avg_reward(means,stds, e,epsilon,timesteps,retval):
     plt.xlabel("Steps")
     #save graph to the logs dir
     plt.savefig(retval+"/logs/"+training_folder+"/graphs/avg_reward_"+str(e)+".png",bbox_inches='tight')
+
+def choose_epsilon_decay(epsilon, experiments):
+    #chooses a suitable epsilon decay for our epsilon and the amount of experiments
+    decay=0.99
+    while epsilon*decay**experiments<=0.005:
+        decay+=0.001
+    return decay
 
 def insertToSpreadSheets(training,gameList,stateList,eps,experiments,min_rewardList,maxRewList,total_rewList,timesteps,frames_stack,learning_rate,completed_levelList,mb_size):
     # insert tracking information to our online google sheets table.
