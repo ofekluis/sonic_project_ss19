@@ -109,6 +109,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
     max_x = defaultdict(lambda: 0.0) #keep track of maxium x distance covered in a level
     total_total_rew=0
     steps=0 # how many steps did sonic do in total over all experiments
+    save_best_x_bool=False #should the log be saved with a special name
     with tf.Session(config=config) as sess:
         model=m.ddqn_model(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
         target_model=m.ddqn_model(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
@@ -157,7 +158,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
             next_info=dict([]) # keep track of next info vector
             experimentRewardList=np.zeros(timesteps)
             current_max_x=0.0 # current level max distance in this experiment
-            done = False # keep track if sonic lost all his lives
+            done = False # keep track if an episode has finished
             lvl=None
             #Observation
             #in this loop sonic plays according to epsilon greedy and saves its experience
@@ -184,10 +185,6 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                 max_reward = max(reward, max_reward)
                 min_reward = min(reward, min_reward)
                 lvl= (next_info_dic["zone"],next_info_dic["act"])
-                if env.max_x > max_x[lvl]:
-                    # if this is the farthest we've ever reached in this level
-                    # mostly to keep track
-                    max_x[lvl] = env.max_x
                 if steps>0:
                     # collect the observation into the memory queue
                     memory.append((obs, next_obs ,action, reward, done, info, next_info))
@@ -197,6 +194,23 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                 info_dic= next_info_dic
                 current_max_x = max(current_max_x, env.max_x) # get current maximum x distance
                 experimentRewardList[i]=reward # save rewards of current experiment
+                if current_max_x > max_x[lvl]:
+                    # if this is the farthest we've ever reached in this level
+                    # save log under a different name
+                    save_best_x_bool=True
+                    max_x[lvl] = current_max_x
+                if done or won or i == timesteps-1:
+                    #handle end of episode, generate logs
+                    #in case sonic looses/wins start again
+                    obs=env.reset()
+                    if i==timesteps-1:
+                        env.close()
+                    if save_best_x:
+                        # if this is the farthest we've ever reached in this level
+                        # save log under a different name
+                        max_x[lvl] = current_max_x
+                        save_best_x(current_max_x,won,state)
+                        save_best_x_bool = False
                 if steps>=mb_size:
                     # first make sure we have enough experience for a minibatch
                     # training
@@ -236,9 +250,6 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                     if steps%check_point_interval==0:
                         #save weights every check_point_interval steps
                         model.save_weights(retval+"/logs/"+training_folder+"/model_checkpoints/sonic_model_"+str(steps)+".h5")
-                if done:
-                    #in case sonic looses/wins start again
-                    obs=env.reset()
             #decay epsilon
             if epsilon > 0.005:
                 epsilon*=epsilon_decay
@@ -274,19 +285,28 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
             #if info_dic["level_end_bonus"] > 0:
              #   completed_level=True
             completed_levelList.append(won)
-            env.close()
     retval = os.getcwd()
     os.chdir(retval+"/logs/"+training_folder)
-    if won:
-        retval=os.getcwd()
-        files = os.listdir(retval)
-        paths = [os.path.join(retval, basename) for basename in files if basename.endswith('000000.bk2')]
-        latest_file=max(paths, key=os.path.getctime)
-        timestr = time.strftime("%Y%m%d-%H%M%S")
-        os.rename(os.path.basename(latest_file), os.path.basename(latest_file)+"_LEVEL_COMPLETED_"+timestr)
-    os.chdir("../..")
     insertToSpreadSheets(training,gameList,stateList,eps,experiments,minRewList,maxRewList,total_rewList,timesteps,frames_stack,learning_rate,completed_levelList,mb_size)
 
+def save_best_x(x,won,lvl):
+    #save logs with special name for best gameplay seen so far for a lvl
+    retval = os.getcwd()
+    os.chdir(retval+"/logs/"+training_folder)
+    retval=os.getcwd()
+    files = os.listdir(retval)
+    paths = [os.path.join(retval, basename) for basename in files if lvl in basename and basename.endswith(".bk2")]
+    latest_file=max(paths, key=os.path.getctime)
+    for path in paths:
+        if path!=latest_file:
+            os.remove(path)
+    timestr = time.strftime("%Y%m%d-%H%M%S")
+    suffix = "_MAX_X_" + str(x)
+    if won:
+        suffix+="_LEVEL_COMPLETED"
+    newName=os.path.basename(latest_file)[:-4]+suffix+"_"+timestr+".bk2"
+    os.rename(os.path.basename(latest_file), newName)
+    os.chdir("../..")
 def plot_avg_reward(means,stds, e,epsilon,timesteps,retval):
     #plots the avg. reward graph
     ci = 0.95 # 95% confidence interval
