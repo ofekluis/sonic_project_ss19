@@ -113,8 +113,9 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
     with tf.Session(config=config) as sess:
         model=m.ddqn_model(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
         target_model=m.ddqn_model(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
-        if os.path.isfile("sonic_model.h5"):
-            model.load_weights("sonic_model.h5")
+        if os.path.isfile(retval+"/sonic_model.h5"):
+            model.load_weights(retval+"/sonic_model.h5")
+            print("using saved weights")
         target_model.set_weights(model.get_weights())
         model.compile(loss="mse", optimizer=optimizers.Adam(lr=learning_rate), metrics=["accuracy"])
         target_model.compile(loss="mse", optimizer=optimizers.Adam(lr=learning_rate), metrics=["accuracy"])
