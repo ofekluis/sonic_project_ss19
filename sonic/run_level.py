@@ -13,6 +13,7 @@ import os
 frames_stack=4
 ACTION_SIZE=8
 learning_rate = 5e-5
+action_persist=4
 target_model = m.ddqn_model(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
 if os.path.isfile("sonic_target_model.h5"):
     target_model.load_weights("sonic_target_model.h5")
@@ -42,7 +43,9 @@ for t in range(timesteps):
     else:
         Q = target_model.predict([obs[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
         action = np.argmax(Q)
-    won,next_obs, reward, done, info = env.step(action)     # result of action
+    for j in range(action_persist):
+        won, next_obs, _, done, info = env.step(action)     # result of action
+    print(info)
     info = np.array(list(info.values()))
     next_obs = np.array(next_obs) #converts from Lazy format to normal numpy array see wrappers_atari.py
     obs=next_obs
