@@ -354,7 +354,7 @@ def insertToSpreadSheets(training,gameList,stateList,eps,experiments,min_rewardL
     sheet = client.open("SonicTable").sheet1  # Open the spreadhseet
 
     #training2=int(sheet.cell(sheet.row_count,1).value)+1
-    for e in experiments:
+    for e in range(experiments):
         insertRow=[training,gameList[e],stateList[e], eps, experiments,timesteps,min_rewardList[e],maxRewList[e],total_rewList[e],frames_stack,mb_size,learning_rate,completed_levelList[e]]
         sheet.append_row(insertRow)
 
