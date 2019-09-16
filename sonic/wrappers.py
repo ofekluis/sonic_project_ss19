@@ -97,9 +97,9 @@ class RewardWrapper(gym.Wrapper):
             if info["x"] > self.last_info["x"]:
                 #add reward for positive changes in x scaled by level's length
                 if lvl != (5,2):
-                    rew+=(scaled_prog-self.last_scaled_prog)*20000
+                    rew+=(scaled_prog-self.last_scaled_prog)*5000
                 else:
-                    rew+=2
+                    rew+=1
 
             if self.before_last_info:
                 d_x=info["x"]-self.before_last_info["x"]
@@ -118,16 +118,16 @@ class RewardWrapper(gym.Wrapper):
                 self.last_life_lost=self.steps
             d_score = info["score"]-self.last_info["score"]
             if d_score > 0:
-                rew+=d_score*0.005
+                rew+=d_score*0.001
             if info["rings"] > self.last_info["rings"]:
-                rew+=0.5
+                rew+=0.2
             if self.last_info["rings"] > 0 and info["rings"] == 0:
                 # if we were attacked and lost all rings
                 pass
                 #rew-=1
             if info["x"]>self.max_x:
                 #if this point was the farthest we've reached in this level (in these t timesteps)
-                rew+=2
+                rew+=3
                 self.max_x = info["x"]
             self.last_scaled_prog=scaled_prog
         self.steps+=1
