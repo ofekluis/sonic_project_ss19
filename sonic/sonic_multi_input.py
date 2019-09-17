@@ -60,7 +60,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
     training=int(sheet.cell(sheet.row_count,1).value)+1 # get the training number for listing in google sheets
     insertRow=[training]
     global training_folder
-    training_folder='Training_'+str(training)
+    training_folder='Training_'+str(training)+"_"+str(epsilon)+"_"+str(experiments)
     retval = os.getcwd()
     sheet.append_row(insertRow)
     #make some dirs for logs
