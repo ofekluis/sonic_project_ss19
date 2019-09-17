@@ -275,7 +275,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
             print("Current epsilon:",epsilon)
             print("Experiment",e,"out of",experiments,"with",timesteps,"steps is finished")
             # some more info for tracking
-            maxXList.append(max_x)
+            maxXList.append(max_x[lvl])
             currentMaxXList.append(current_max_x)
             gameList.append(game)
             stateList.append(state)
@@ -352,12 +352,45 @@ def choose_epsilon_decay(epsilon, experiments):
 
 def insertToSpreadSheets(training,gameList,stateList,eps,experiments,min_rewardList,maxRewList,total_rewList,timesteps,frames_stack,learning_rate,completed_levelList,mb_size,currentMaxXList,maxXList):
     # insert tracking information to our online google sheets table.
+    print("CURRENT DIRECTORY")
+    os.chdir("../..")
+    print(os.getcwd())
     scope = ["https://spreadsheets.google.com/feeds",'https://www.googleapis.com/auth/spreadsheets',"https://www.googleapis.com/auth/drive.file","https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_name("Creds.json", scope)
     client = gspread.authorize(creds)
     sheet = client.open("SonicTable").sheet1  # Open the spreadhseet
 
     for e in range(experiments):
+        print(training)
+        print(type(training))
+        print(gameList[e])
+        print(type(gameList[e]))
+        print(stateList[e])
+        print(type(stateList[e]))
+        print(eps)
+        print(type(eps))
+        print(experiments)
+        print(type(experiments))
+        print(timesteps)
+        print(type(timesteps))
+        print(min_rewardList[e])
+        print(type(min_rewardList[e]))
+        print(maxRewList[e])
+        print(type(maxRewList[e]))
+        print(total_rewList[e])
+        print(type(total_rewList[e]))
+        print(currentMaxXList[e])
+        print(type(currentMaxXList[e]))
+        print(maxXList[e])
+        print(type(maxXList[e]))
+        print(frames_stack)
+        print(type(frames_stack))
+        print(mb_size)
+        print(type(mb_size))
+        print(learning_rate)
+        print(type(learning_rate))
+        print(completed_levelList[e])
+        print(type(completed_levelList[e]))
         insertRow=[training,gameList[e],stateList[e], eps, experiments,timesteps,min_rewardList[e],maxRewList[e],total_rewList[e],currentMaxXList[e],maxXList[e],frames_stack,mb_size,learning_rate,completed_levelList[e]]
         sheet.append_row(insertRow)
 
