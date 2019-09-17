@@ -127,6 +127,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
         #train on all but the first level, which is reserved for testing
         states = retro.data.list_states(game)[1:]
         #information for tracking below
+        currentMaxXList=[]
         maxXList=[]
         gameList=[]
         stateList=[]
@@ -274,7 +275,8 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
             print("Current epsilon:",epsilon)
             print("Experiment",e,"out of",experiments,"with",timesteps,"steps is finished")
             # some more info for tracking
-            maxXList.append(max_x[lvl])
+            maxXList.append(max_x)
+            currentMaxXList.append(current_max_x)
             gameList.append(game)
             stateList.append(state)
             minRewList.append(min_reward)
@@ -286,7 +288,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
             completed_levelList.append(won)
     retval = os.getcwd()
     os.chdir(retval+"/logs/"+training_folder)
-    insertToSpreadSheets(training,gameList,stateList,eps,experiments,minRewList,maxRewList,total_rewList,timesteps,frames_stack,learning_rate,completed_levelList,mb_size,maxXList)
+    insertToSpreadSheets(training,gameList,stateList,eps,experiments,minRewList,maxRewList,total_rewList,timesteps,frames_stack,learning_rate,completed_levelList,mb_size,currentMaxXList,maxXList)
 
 def save_best_x(x,won,lvl):
     #save logs with special name for best gameplay seen so far for a lvl
@@ -348,16 +350,15 @@ def choose_epsilon_decay(epsilon, experiments):
         decay+=0.001
     return decay
 
-def insertToSpreadSheets(training,gameList,stateList,eps,experiments,min_rewardList,maxRewList,total_rewList,timesteps,frames_stack,learning_rate,completed_levelList,mb_size,maxXList):
+def insertToSpreadSheets(training,gameList,stateList,eps,experiments,min_rewardList,maxRewList,total_rewList,timesteps,frames_stack,learning_rate,completed_levelList,mb_size,currentMaxXList,maxXList):
     # insert tracking information to our online google sheets table.
     scope = ["https://spreadsheets.google.com/feeds",'https://www.googleapis.com/auth/spreadsheets',"https://www.googleapis.com/auth/drive.file","https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_name("Creds.json", scope)
     client = gspread.authorize(creds)
     sheet = client.open("SonicTable").sheet1  # Open the spreadhseet
 
-    #training2=int(sheet.cell(sheet.row_count,1).value)+1
     for e in range(experiments):
-        insertRow=[training,gameList[e],stateList[e], eps, experiments,timesteps,min_rewardList[e],maxRewList[e],total_rewList[e],maxXList[e],frames_stack,mb_size,learning_rate,completed_levelList[e]]
+        insertRow=[training,gameList[e],stateList[e], eps, experiments,timesteps,min_rewardList[e],maxRewList[e],total_rewList[e],currentMaxXList[e],maxXList[e],frames_stack,mb_size,learning_rate,completed_levelList[e]]
         sheet.append_row(insertRow)
 
 
