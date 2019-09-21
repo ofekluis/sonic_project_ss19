@@ -227,7 +227,7 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
                             Q_target_next = target_model.predict([next_obs[np.newaxis,:]
                                 ,next_info[np.newaxis,:]])[0]
                             targets[i] = copy.copy(Q) #target is former Q plus the update below
-                            #diff+=sum(Q_next-Q_target_next)
+                            #diff+=sum(Q_next-Q_target_next) for the commented out converged flag we decided against it
                             if done:
                                 # in case of a finished episode
                                 targets[i, action] = reward
