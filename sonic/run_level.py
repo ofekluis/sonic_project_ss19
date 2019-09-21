@@ -39,7 +39,7 @@ obs = np.array(obs) #converts from Lazy format to normal numpy array see wrapper
 timesteps=10000
 for t in range(timesteps):
     if t<1 or t%100==0:
-        action = env.action_space.sample()
+        action = env.action_space.sample() # a bit of randomness so sonic won't get stuck.
     else:
         Q = target_model.predict([obs[np.newaxis,:],info[np.newaxis,:]])[0]          # Q-values predictions
         action = np.argmax(Q)
