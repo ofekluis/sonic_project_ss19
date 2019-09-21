@@ -7,7 +7,6 @@ from collections import deque,defaultdict
 from keras.callbacks import TensorBoard
 from skimage import color
 from skimage.transform import resize
-import evaluationScript
 import os
 import random
 import numpy as np
@@ -363,6 +362,7 @@ def insertToSpreadSheets(training,gameList,stateList,eps,experiments,min_rewardL
     for e in range(experiments):
         insertRow=[training,gameList[e],stateList[e], eps, experiments,timesteps,min_rewardList[e],maxRewList[e],total_rewList[e],currentMaxXList[e],maxXList[e],frames_stack,mb_size,learning_rate,completed_levelList[e]]
         sheet.append_row(insertRow)
+        time.sleep(10)
 
 
 def convertBK2toMovie():
@@ -375,6 +375,5 @@ def convertBK2toMovie():
 if __name__ == '__main__':
     main()
     #convertBK2toMovie() #not working yet, needs to be done
-    #evaluationScript.main(rewardList,experiments,timesteps,eps,epsilon_decay)
 
 

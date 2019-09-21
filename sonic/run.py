@@ -3,9 +3,11 @@ import sonic_multi_input
 #run multiple trainings
 def main():
 	#evaluation Training sets -> currently 72 trainings
-	epsilonList=[0.3, 0.5, 0.7]
+	#epsilonList=[0.3, 0.5, 0.7]
+	epsilonList=[0.3]
 	experimentList=[2000]
-	timeStepsList=[5000,10000,15000]
+	timeStepsList=[10000]
+	#timeStepsList=[15000,10000,15000]
 	#mb_sizeList=[32,128]
 	mb_sizeList=[32]
 	frameStacksList=[4]
