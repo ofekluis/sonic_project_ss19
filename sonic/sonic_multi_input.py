@@ -42,11 +42,6 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
 
     games = ["SonicTheHedgehog-Genesis"]
 
-    #delete old weights
-    #os.remove("sonic_model_0.h5")
-    #os.remove("sonic_model.h5")
-    #os.remove("sonic_target_model.h5")
-
     #writing to spreadsheets
     scope = ["https://spreadsheets.google.com/feeds",'https://www.googleapis.com/auth/spreadsheets',"https://www.googleapis.com/auth/drive.file","https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_name("Creds.json", scope)
@@ -108,6 +103,16 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
     max_x = defaultdict(lambda: 0.0) #keep track of maxium x distance covered in a level
     total_total_rew=0
     steps=0 # how many steps did sonic do in total over all experiments
+    train_interval=100 # how often to train in steps
+    #information for tracking below
+    currentMaxXList=[]
+    maxXList=[]
+    gameList=[]
+    stateList=[]
+    minRewList=[]
+    maxRewList=[]
+    total_rewList=[]
+    completed_levelList=[]
     with tf.Session(config=config) as sess:
         model=m.ddqn_model(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
         target_model=m.ddqn_model(input_shape=(128,128,frames_stack),nb_classes=ACTION_SIZE, info=11)
@@ -125,16 +130,6 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
         game = "SonicTheHedgehog-Genesis"#np.random.choice(games,1)[0]
         #train on all but the first level, which is reserved for testing
         states = retro.data.list_states(game)[1:]
-        #information for tracking below
-        currentMaxXList=[]
-        maxXList=[]
-        gameList=[]
-        stateList=[]
-        minRewList=[]
-        maxRewList=[]
-        total_rewList=[]
-        completed_levelList=[]
-        train_interval=100 # how often to train in steps
         for e in range(experiments):
             """
             if converged:
