@@ -58,6 +58,9 @@ def main(epsilon,experiments,timesteps,mb_size,frames_stack):
     retval = os.getcwd()
     sheet.append_row(insertRow)
     #make some dirs for logs
+    os.chdir(retval)
+    if not os.path.isdir("logs"):
+        os.mkdir("logs")
     os.chdir(retval+"/logs")
     if not os.path.isdir(training_folder):
         os.mkdir(training_folder)
